@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.tensor as tensor
@@ -21,18 +22,18 @@ from paddle.nn import TransformerEncoder, Linear, Layer, Embedding, LayerNorm, T
 from .. import PretrainedModel, register_base_model
 
 __all__ = [
-    'BertModel',
-    "BertPretrainedModel",
-    'BertForPretraining',
-    'BertPretrainingCriterion',
-    'BertPretrainingHeads',
-    'BertForSequenceClassification',
-    'BertForTokenClassification',
-    'BertForQuestionAnswering',
+    'LayoutLMModel',
+    "LayoutLMPretrainedModel",
+    'LayoutLMForPretraining',
+    'LayoutLMPretrainingCriterion',
+    'LayoutLMPretrainingHeads',
+    'LayoutLMForSequenceClassification',
+    'LayoutLMForTokenClassification',
+    'LayoutLMForQuestionAnswering',
 ]
 
 
-class BertEmbeddings(Layer):
+class LayoutLMEmbeddings(Layer):
     """
     Include embeddings from word, position and token_type embeddings
     """
@@ -42,17 +43,32 @@ class BertEmbeddings(Layer):
                  hidden_size=768,
                  hidden_dropout_prob=0.1,
                  max_position_embeddings=512,
+                 max_2d_position_embeddings=1024,
                  type_vocab_size=16):
-        super(BertEmbeddings, self).__init__()
+        super().__init__()
         self.word_embeddings = nn.Embedding(
             vocab_size, hidden_size, padding_idx=0)
         self.position_embeddings = nn.Embedding(max_position_embeddings,
                                                 hidden_size)
+        # gry add for layoutlm
+        self.x_position_embeddings = nn.Embedding(max_2d_position_embeddings,
+                                                  hidden_size)
+        self.y_position_embeddings = nn.Embedding(max_2d_position_embeddings,
+                                                  hidden_size)
+        self.h_position_embeddings = nn.Embedding(max_2d_position_embeddings,
+                                                  hidden_size)
+        self.w_position_embeddings = nn.Embedding(max_2d_position_embeddings,
+                                                  hidden_size)
+        # end of gry add for layoutlm
         self.token_type_embeddings = nn.Embedding(type_vocab_size, hidden_size)
         self.layer_norm = nn.LayerNorm(hidden_size)
         self.dropout = nn.Dropout(hidden_dropout_prob)
 
-    def forward(self, input_ids, token_type_ids=None, position_ids=None):
+    def forward(self,
+                input_ids,
+                bbox=None,
+                token_type_ids=None,
+                position_ids=None):
         if position_ids is None:
             ones = paddle.ones_like(input_ids, dtype="int64")
             seq_length = paddle.cumsum(ones, axis=-1)
@@ -64,35 +80,58 @@ class BertEmbeddings(Layer):
 
         input_embedings = self.word_embeddings(input_ids)
         position_embeddings = self.position_embeddings(position_ids)
+        # gry add
+        try:
+            left_position_embeddings = self.x_position_embeddings(bbox[:, :, 0])
+            upper_position_embeddings = self.y_position_embeddings(bbox[:, :,
+                                                                        1])
+            right_position_embeddings = self.x_position_embeddings(bbox[:, :,
+                                                                        2])
+            lower_position_embeddings = self.y_position_embeddings(bbox[:, :,
+                                                                        3])
+        except IndexError as e:
+            raise IndexError(
+                "The :obj:`bbox`coordinate values should be within 0-1000 range."
+            ) from e
+        h_position_embeddings = self.h_position_embeddings(bbox[:, :, 3] -
+                                                           bbox[:, :, 1])
+        w_position_embeddings = self.w_position_embeddings(bbox[:, :, 2] -
+                                                           bbox[:, :, 0])
+        # end of gry add
+
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
 
-        embeddings = input_embedings + position_embeddings + token_type_embeddings
+        embeddings = (
+            input_embedings + position_embeddings + left_position_embeddings +
+            upper_position_embeddings + right_position_embeddings +
+            lower_position_embeddings + h_position_embeddings +
+            w_position_embeddings + token_type_embeddings)
         embeddings = self.layer_norm(embeddings)
         embeddings = self.dropout(embeddings)
         return embeddings
 
 
-class BertPooler(Layer):
+class LayoutLMPooler(Layer):
     """
     """
 
-    def __init__(self, hidden_size, pool_act="tanh"):
-        super(BertPooler, self).__init__()
+    def __init__(self, hidden_size, with_pool):
+        super(LayoutLMPooler, self).__init__()
         self.dense = nn.Linear(hidden_size, hidden_size)
         self.activation = nn.Tanh()
-        self.pool_act = pool_act
+        self.with_pool = with_pool
 
     def forward(self, hidden_states):
         # We "pool" the model by simply taking the hidden state corresponding
         # to the first token.
         first_token_tensor = hidden_states[:, 0]
         pooled_output = self.dense(first_token_tensor)
-        if self.pool_act == "tanh":
+        if self.with_pool == 'tanh':
             pooled_output = self.activation(pooled_output)
         return pooled_output
 
 
-class BertPretrainedModel(PretrainedModel):
+class LayoutLMPretrainedModel(PretrainedModel):
     """
     An abstract class for pretrained BERT models. It provides BERT related
     `model_config_file`, `resource_files_names`, `pretrained_resource_files_map`,
@@ -102,7 +141,7 @@ class BertPretrainedModel(PretrainedModel):
 
     model_config_file = "model_config.json"
     pretrained_init_configuration = {
-        "bert-base-uncased": {
+        "layoutlm-base-uncased": {
             "vocab_size": 30522,
             "hidden_size": 768,
             "num_hidden_layers": 12,
@@ -112,195 +151,20 @@ class BertPretrainedModel(PretrainedModel):
             "hidden_dropout_prob": 0.1,
             "attention_probs_dropout_prob": 0.1,
             "max_position_embeddings": 512,
+            "max_2d_position_embeddings": 1024,
             "type_vocab_size": 2,
             "initializer_range": 0.02,
             "pad_token_id": 0,
-        },
-        "bert-large-uncased": {
-            "vocab_size": 30522,
-            "hidden_size": 1024,
-            "num_hidden_layers": 24,
-            "num_attention_heads": 16,
-            "intermediate_size": 4096,
-            "hidden_act": "gelu",
-            "hidden_dropout_prob": 0.1,
-            "attention_probs_dropout_prob": 0.1,
-            "max_position_embeddings": 512,
-            "type_vocab_size": 2,
-            "initializer_range": 0.02,
-            "pad_token_id": 0,
-        },
-        "bert-base-multilingual-uncased": {
-            "vocab_size": 105879,
-            "hidden_size": 768,
-            "num_hidden_layers": 12,
-            "num_attention_heads": 12,
-            "intermediate_size": 3072,
-            "hidden_act": "gelu",
-            "hidden_dropout_prob": 0.1,
-            "attention_probs_dropout_prob": 0.1,
-            "max_position_embeddings": 512,
-            "type_vocab_size": 2,
-            "initializer_range": 0.02,
-            "pad_token_id": 0,
-        },
-        "bert-base-cased": {
-            "vocab_size": 28996,
-            "hidden_size": 768,
-            "num_hidden_layers": 12,
-            "num_attention_heads": 12,
-            "intermediate_size": 3072,
-            "hidden_act": "gelu",
-            "hidden_dropout_prob": 0.1,
-            "attention_probs_dropout_prob": 0.1,
-            "max_position_embeddings": 512,
-            "type_vocab_size": 2,
-            "initializer_range": 0.02,
-            "pad_token_id": 0,
-        },
-        "bert-base-chinese": {
-            "vocab_size": 21128,
-            "hidden_size": 768,
-            "num_hidden_layers": 12,
-            "num_attention_heads": 12,
-            "intermediate_size": 3072,
-            "hidden_act": "gelu",
-            "hidden_dropout_prob": 0.1,
-            "attention_probs_dropout_prob": 0.1,
-            "max_position_embeddings": 512,
-            "type_vocab_size": 2,
-            "initializer_range": 0.02,
-            "pad_token_id": 0,
-        },
-        "bert-base-multilingual-cased": {
-            "vocab_size": 119547,
-            "hidden_size": 768,
-            "num_hidden_layers": 12,
-            "num_attention_heads": 12,
-            "intermediate_size": 3072,
-            "hidden_act": "gelu",
-            "hidden_dropout_prob": 0.1,
-            "attention_probs_dropout_prob": 0.1,
-            "max_position_embeddings": 512,
-            "type_vocab_size": 2,
-            "initializer_range": 0.02,
-            "pad_token_id": 0,
-        },
-        "bert-large-cased": {
-            "vocab_size": 28996,
-            "hidden_size": 1024,
-            "num_hidden_layers": 24,
-            "num_attention_heads": 16,
-            "intermediate_size": 4096,
-            "hidden_act": "gelu",
-            "hidden_dropout_prob": 0.1,
-            "attention_probs_dropout_prob": 0.1,
-            "max_position_embeddings": 512,
-            "type_vocab_size": 2,
-            "initializer_range": 0.02,
-            "pad_token_id": 0,
-        },
-        "bert-wwm-chinese": {
-            "vocab_size": 21128,
-            "hidden_size": 768,
-            "num_hidden_layers": 12,
-            "num_attention_heads": 12,
-            "intermediate_size": 3072,
-            "hidden_act": "gelu",
-            "hidden_dropout_prob": 0.1,
-            "attention_probs_dropout_prob": 0.1,
-            "max_position_embeddings": 512,
-            "type_vocab_size": 2,
-            "initializer_range": 0.02,
-            "pad_token_id": 0,
-        },
-        "bert-wwm-ext-chinese": {
-            "vocab_size": 21128,
-            "hidden_size": 768,
-            "num_hidden_layers": 12,
-            "num_attention_heads": 12,
-            "intermediate_size": 3072,
-            "hidden_act": "gelu",
-            "hidden_dropout_prob": 0.1,
-            "attention_probs_dropout_prob": 0.1,
-            "max_position_embeddings": 512,
-            "type_vocab_size": 2,
-            "initializer_range": 0.02,
-            "pad_token_id": 0,
-        },
-        "macbert-base-chinese": {
-            "vocab_size": 21128,
-            "hidden_size": 768,
-            "num_hidden_layers": 12,
-            "num_attention_heads": 12,
-            "intermediate_size": 3072,
-            "hidden_act": "gelu",
-            "hidden_dropout_prob": 0.1,
-            "attention_probs_dropout_prob": 0.1,
-            "max_position_embeddings": 512,
-            "type_vocab_size": 2,
-            "initializer_range": 0.02,
-            "pad_token_id": 0,
-        },
-        "macbert-large-chinese": {
-            "vocab_size": 21128,
-            "hidden_size": 1024,
-            "num_hidden_layers": 24,
-            "num_attention_heads": 16,
-            "intermediate_size": 4096,
-            "hidden_act": "gelu",
-            "hidden_dropout_prob": 0.1,
-            "attention_probs_dropout_prob": 0.1,
-            "max_position_embeddings": 512,
-            "type_vocab_size": 2,
-            "initializer_range": 0.02,
-            "pad_token_id": 0,
-        },
-        "simbert-base-chinese": {
-            "vocab_size": 13685,
-            "hidden_size": 768,
-            "num_hidden_layers": 12,
-            "num_attention_heads": 12,
-            "intermediate_size": 3072,
-            "hidden_act": "gelu",
-            "hidden_dropout_prob": 0.1,
-            "attention_probs_dropout_prob": 0.1,
-            "max_position_embeddings": 512,
-            "type_vocab_size": 2,
-            "initializer_range": 0.02,
-            "pad_token_id": 0,
-        },
+        }
     }
     resource_files_names = {"model_state": "model_state.pdparams"}
     pretrained_resource_files_map = {
         "model_state": {
-            "bert-base-uncased":
-            "https://paddlenlp.bj.bcebos.com/models/transformers/bert-base-uncased.pdparams",
-            "bert-large-uncased":
-            "https://paddlenlp.bj.bcebos.com/models/transformers/bert-large-uncased.pdparams",
-            "bert-base-multilingual-uncased":
-            "http://paddlenlp.bj.bcebos.com/models/transformers/bert-base-multilingual-uncased.pdparams",
-            "bert-base-cased":
-            "http://paddlenlp.bj.bcebos.com/models/transformers/bert/bert-base-cased.pdparams",
-            "bert-base-chinese":
-            "http://paddlenlp.bj.bcebos.com/models/transformers/bert/bert-base-chinese.pdparams",
-            "bert-base-multilingual-cased":
-            "http://paddlenlp.bj.bcebos.com/models/transformers/bert/bert-base-multilingual-cased.pdparams",
-            "bert-large-cased":
-            "http://paddlenlp.bj.bcebos.com/models/transformers/bert/bert-large-cased.pdparams",
-            "bert-wwm-chinese":
-            "http://paddlenlp.bj.bcebos.com/models/transformers/bert/bert-wwm-chinese.pdparams",
-            "bert-wwm-ext-chinese":
-            "http://paddlenlp.bj.bcebos.com/models/transformers/bert/bert-wwm-ext-chinese.pdparams",
-            "macbert-base-chinese":
-            "https://paddlenlp.bj.bcebos.com/models/transformers/macbert/macbert-base-chinese.pdparams",
-            "macbert-large-chinese":
-            "https://paddlenlp.bj.bcebos.com/models/transformers/macbert/macbert-large-chinese.pdparams",
-            "simbert-base-chinese":
-            "https://paddlenlp.bj.bcebos.com/models/transformers/simbert/simbert-base-chinese-v1.pdparams",
+            "layoutlm-base-uncased":
+            "https://paddlenlp.bj.bcebos.com/models/transformers/layoutlm-base-uncased.pdparams",
         }
     }
-    base_model_prefix = "bert"
+    base_model_prefix = "layoutlm"
 
     def init_weights(self, layer):
         """ Initialization hook """
@@ -320,7 +184,7 @@ class BertPretrainedModel(PretrainedModel):
 
 
 @register_base_model
-class BertModel(BertPretrainedModel):
+class LayoutLMModel(LayoutLMPretrainedModel):
     """
     The bare BERT Model transformer outputting raw hidden-states without any specific head on top.
 
@@ -370,16 +234,18 @@ class BertModel(BertPretrainedModel):
                  hidden_dropout_prob=0.1,
                  attention_probs_dropout_prob=0.1,
                  max_position_embeddings=512,
+                 max_2d_position_embeddings=512,
                  type_vocab_size=16,
                  initializer_range=0.02,
                  pad_token_id=0,
-                 pool_act="tanh"):
-        super(BertModel, self).__init__()
+                 with_pool='tanh'):
+        super(LayoutLMModel, self).__init__()
         self.pad_token_id = pad_token_id
         self.initializer_range = initializer_range
-        self.embeddings = BertEmbeddings(
+        self.embeddings = LayoutLMEmbeddings(
             vocab_size, hidden_size, hidden_dropout_prob,
-            max_position_embeddings, type_vocab_size)
+            max_position_embeddings, max_2d_position_embeddings,
+            type_vocab_size)
         encoder_layer = nn.TransformerEncoderLayer(
             hidden_size,
             num_attention_heads,
@@ -389,24 +255,39 @@ class BertModel(BertPretrainedModel):
             attn_dropout=attention_probs_dropout_prob,
             act_dropout=0)
         self.encoder = nn.TransformerEncoder(encoder_layer, num_hidden_layers)
-        self.pooler = BertPooler(hidden_size, pool_act)
+        self.pooler = LayoutLMPooler(hidden_size, with_pool)
         self.apply(self.init_weights)
 
     def forward(self,
                 input_ids,
+                bbox=None,
                 token_type_ids=None,
                 position_ids=None,
                 attention_mask=None,
                 output_hidden_states=False):
+
+        input_shape = input_ids.shape
+
         if attention_mask is None:
             attention_mask = paddle.unsqueeze(
                 (input_ids == self.pad_token_id
                  ).astype(self.pooler.dense.weight.dtype) * -1e9,
                 axis=[1, 2])
+        # if input_ids is not None:
+        #     np.save("pd_input_ids.npy", input_ids.numpy())
+        # if position_ids is not None:
+        #     np.save("pd_position_ids.npy", position_ids.numpy())
+        # if token_type_ids is not None:
+        #     np.save("pd_token_type_ids.npy", token_type_ids.numpy())
+        if bbox is None:
+            bbox = paddle.zeros(tuple(list(input_shape) + [4]), dtype="int64")
+
         embedding_output = self.embeddings(
             input_ids=input_ids,
+            bbox=bbox,
             position_ids=position_ids,
             token_type_ids=token_type_ids)
+
         if output_hidden_states:
             output = embedding_output
             encoder_outputs = []
@@ -425,9 +306,9 @@ class BertModel(BertPretrainedModel):
             return sequence_output, pooled_output
 
 
-class BertForQuestionAnswering(BertPretrainedModel):
+class LayoutLMForQuestionAnswering(LayoutLMPretrainedModel):
     def __init__(self, bert, dropout=None):
-        super(BertForQuestionAnswering, self).__init__()
+        super(LayoutLMForQuestionAnswering, self).__init__()
         self.bert = bert  # allow bert to be config
         self.classifier = nn.Linear(self.bert.config["hidden_size"], 2)
         self.apply(self.init_weights)
@@ -446,19 +327,19 @@ class BertForQuestionAnswering(BertPretrainedModel):
         return start_logits, end_logits
 
 
-class BertForSequenceClassification(BertPretrainedModel):
+class LayoutLMForSequenceClassification(LayoutLMPretrainedModel):
     """
     Model for sentence (pair) classification task with BERT.
     Args:
-        bert (BertModel): An instance of BertModel.
+        bert (LayoutLMModel): An instance of LayoutLMModel.
         num_classes (int, optional): The number of classes. Default 2
         dropout (float, optional): The dropout probability for output of BERT.
-            If None, use the same value as `hidden_dropout_prob` of `BertModel`
+            If None, use the same value as `hidden_dropout_prob` of `LayoutLMModel`
             instance `bert`. Default None
     """
 
     def __init__(self, bert, num_classes=2, dropout=None):
-        super(BertForSequenceClassification, self).__init__()
+        super(LayoutLMForSequenceClassification, self).__init__()
         self.num_classes = num_classes
         self.bert = bert  # allow bert to be config
         self.dropout = nn.Dropout(dropout if dropout is not None else
@@ -483,9 +364,9 @@ class BertForSequenceClassification(BertPretrainedModel):
         return logits
 
 
-class BertForTokenClassification(BertPretrainedModel):
+class LayoutLMForTokenClassification(LayoutLMPretrainedModel):
     def __init__(self, bert, num_classes=2, dropout=None):
-        super(BertForTokenClassification, self).__init__()
+        super(LayoutLMForTokenClassification, self).__init__()
         self.num_classes = num_classes
         self.bert = bert  # allow bert to be config
         self.dropout = nn.Dropout(dropout if dropout is not None else
@@ -510,13 +391,13 @@ class BertForTokenClassification(BertPretrainedModel):
         return logits
 
 
-class BertLMPredictionHead(Layer):
+class LayoutLMLMPredictionHead(Layer):
     def __init__(self,
                  hidden_size,
                  vocab_size,
                  activation,
                  embedding_weights=None):
-        super(BertLMPredictionHead, self).__init__()
+        super(LayoutLMLMPredictionHead, self).__init__()
         self.transform = nn.Linear(hidden_size, hidden_size)
         self.activation = getattr(nn.functional, activation)
         self.layer_norm = nn.LayerNorm(hidden_size)
@@ -543,15 +424,15 @@ class BertLMPredictionHead(Layer):
         return hidden_states
 
 
-class BertPretrainingHeads(Layer):
+class LayoutLMPretrainingHeads(Layer):
     def __init__(self,
                  hidden_size,
                  vocab_size,
                  activation,
                  embedding_weights=None):
-        super(BertPretrainingHeads, self).__init__()
-        self.predictions = BertLMPredictionHead(hidden_size, vocab_size,
-                                                activation, embedding_weights)
+        super(LayoutLMPretrainingHeads, self).__init__()
+        self.predictions = LayoutLMLMPredictionHead(
+            hidden_size, vocab_size, activation, embedding_weights)
         self.seq_relationship = nn.Linear(hidden_size, 2)
 
     def forward(self, sequence_output, pooled_output, masked_positions=None):
@@ -560,11 +441,11 @@ class BertPretrainingHeads(Layer):
         return prediction_scores, seq_relationship_score
 
 
-class BertForPretraining(BertPretrainedModel):
+class LayoutLMForPretraining(LayoutLMPretrainedModel):
     def __init__(self, bert):
-        super(BertForPretraining, self).__init__()
+        super(LayoutLMForPretraining, self).__init__()
         self.bert = bert
-        self.cls = BertPretrainingHeads(
+        self.cls = LayoutLMPretrainingHeads(
             self.bert.config["hidden_size"],
             self.bert.config["vocab_size"],
             self.bert.config["hidden_act"],
@@ -590,9 +471,9 @@ class BertForPretraining(BertPretrainedModel):
             return prediction_scores, seq_relationship_score
 
 
-class BertPretrainingCriterion(paddle.nn.Layer):
+class LayoutLMPretrainingCriterion(paddle.nn.Layer):
     def __init__(self, vocab_size):
-        super(BertPretrainingCriterion, self).__init__()
+        super(LayoutLMPretrainingCriterion, self).__init__()
         # CrossEntropyLoss is expensive since the inner reshape (copy)
         self.loss_fn = paddle.nn.loss.CrossEntropyLoss(ignore_index=-1)
         self.vocab_size = vocab_size
