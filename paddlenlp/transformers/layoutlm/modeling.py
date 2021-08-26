@@ -80,6 +80,7 @@ class LayoutLMEmbeddings(Layer):
 
         input_embedings = self.word_embeddings(input_ids)
         position_embeddings = self.position_embeddings(position_ids)
+
         # gry add
         try:
             left_position_embeddings = self.x_position_embeddings(bbox[:, :, 0])
@@ -106,6 +107,7 @@ class LayoutLMEmbeddings(Layer):
             upper_position_embeddings + right_position_embeddings +
             lower_position_embeddings + h_position_embeddings +
             w_position_embeddings + token_type_embeddings)
+
         embeddings = self.layer_norm(embeddings)
         embeddings = self.dropout(embeddings)
         return embeddings
@@ -177,7 +179,7 @@ class LayoutLMPretrainedModel(PretrainedModel):
                         mean=0.0,
                         std=self.initializer_range
                         if hasattr(self, "initializer_range") else
-                        self.bert.config["initializer_range"],
+                        self.layoutlm.config["initializer_range"],
                         shape=layer.weight.shape))
         elif isinstance(layer, nn.LayerNorm):
             layer._epsilon = 1e-12
@@ -269,16 +271,12 @@ class LayoutLMModel(LayoutLMPretrainedModel):
         input_shape = input_ids.shape
 
         if attention_mask is None:
+            # bs x 1 x 1 x src_len
             attention_mask = paddle.unsqueeze(
                 (input_ids == self.pad_token_id
                  ).astype(self.pooler.dense.weight.dtype) * -1e9,
                 axis=[1, 2])
-        # if input_ids is not None:
-        #     np.save("pd_input_ids.npy", input_ids.numpy())
-        # if position_ids is not None:
-        #     np.save("pd_position_ids.npy", position_ids.numpy())
-        # if token_type_ids is not None:
-        #     np.save("pd_token_type_ids.npy", token_type_ids.numpy())
+
         if bbox is None:
             bbox = paddle.zeros(tuple(list(input_shape) + [4]), dtype="int64")
 
@@ -300,6 +298,7 @@ class LayoutLMModel(LayoutLMPretrainedModel):
         else:
             sequence_output = self.encoder(embedding_output, attention_mask)
             pooled_output = self.pooler(sequence_output)
+
         if output_hidden_states:
             return encoder_outputs, pooled_output
         else:
@@ -309,12 +308,12 @@ class LayoutLMModel(LayoutLMPretrainedModel):
 class LayoutLMForQuestionAnswering(LayoutLMPretrainedModel):
     def __init__(self, bert, dropout=None):
         super(LayoutLMForQuestionAnswering, self).__init__()
-        self.bert = bert  # allow bert to be config
-        self.classifier = nn.Linear(self.bert.config["hidden_size"], 2)
+        self.layoutlm = bert  # allow bert to be config
+        self.classifier = nn.Linear(self.layoutlm.config["hidden_size"], 2)
         self.apply(self.init_weights)
 
     def forward(self, input_ids, token_type_ids=None):
-        sequence_output, _ = self.bert(
+        sequence_output, _ = self.layoutlm(
             input_ids,
             token_type_ids=token_type_ids,
             position_ids=None,
@@ -323,7 +322,6 @@ class LayoutLMForQuestionAnswering(LayoutLMPretrainedModel):
         logits = self.classifier(sequence_output)
         logits = paddle.transpose(logits, perm=[2, 0, 1])
         start_logits, end_logits = paddle.unstack(x=logits, axis=0)
-
         return start_logits, end_logits
 
 
@@ -341,10 +339,10 @@ class LayoutLMForSequenceClassification(LayoutLMPretrainedModel):
     def __init__(self, bert, num_classes=2, dropout=None):
         super(LayoutLMForSequenceClassification, self).__init__()
         self.num_classes = num_classes
-        self.bert = bert  # allow bert to be config
+        self.layoutlm = bert  # allow bert to be config
         self.dropout = nn.Dropout(dropout if dropout is not None else
-                                  self.bert.config["hidden_dropout_prob"])
-        self.classifier = nn.Linear(self.bert.config["hidden_size"],
+                                  self.layoutlm.config["hidden_dropout_prob"])
+        self.classifier = nn.Linear(self.layoutlm.config["hidden_size"],
                                     num_classes)
         self.apply(self.init_weights)
 
@@ -353,7 +351,7 @@ class LayoutLMForSequenceClassification(LayoutLMPretrainedModel):
                 token_type_ids=None,
                 position_ids=None,
                 attention_mask=None):
-        _, pooled_output = self.bert(
+        _, pooled_output = self.layoutlm(
             input_ids,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
@@ -365,30 +363,63 @@ class LayoutLMForSequenceClassification(LayoutLMPretrainedModel):
 
 
 class LayoutLMForTokenClassification(LayoutLMPretrainedModel):
-    def __init__(self, bert, num_classes=2, dropout=None):
-        super(LayoutLMForTokenClassification, self).__init__()
+    def __init__(self, layoutlm, num_classes=2, dropout=None):
+        super().__init__()
         self.num_classes = num_classes
-        self.bert = bert  # allow bert to be config
+        self.layoutlm = layoutlm  # allow layoutlm to be config
         self.dropout = nn.Dropout(dropout if dropout is not None else
-                                  self.bert.config["hidden_dropout_prob"])
-        self.classifier = nn.Linear(self.bert.config["hidden_size"],
+                                  self.layoutlm.config["hidden_dropout_prob"])
+        self.classifier = nn.Linear(self.layoutlm.config["hidden_size"],
                                     num_classes)
-        self.apply(self.init_weights)
+        self.dropout.apply(self.init_weights)
+        self.classifier.apply(self.init_weights)
 
     def forward(self,
                 input_ids,
+                bbox,
+                attention_mask=None,
                 token_type_ids=None,
                 position_ids=None,
-                attention_mask=None):
-        sequence_output, _ = self.bert(
-            input_ids,
+                inputs_embeds=None,
+                labels=None,
+                output_hidden_states=False):
+        if attention_mask is not None:
+            attention_mask = attention_mask.unsqueeze(
+                axis=[1, 2]).astype("int64")
+
+        outputs = self.layoutlm(
+            input_ids=input_ids,
+            bbox=bbox,
+            attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
-            attention_mask=attention_mask)
+            output_hidden_states=output_hidden_states, )
+
+        sequence_output = outputs[0]
 
         sequence_output = self.dropout(sequence_output)
         logits = self.classifier(sequence_output)
-        return logits
+
+        # add hidden states and attention if they are here
+        outputs = (logits, )  # + outputs[2:]
+        if labels is not None:
+            loss_fct = paddle.nn.CrossEntropyLoss()
+            # Only keep active parts of the loss
+            if attention_mask is not None:
+                active_loss = attention_mask.reshape([-1, ]) == 1
+                # print("active_loss shape: {}, dtype: {}".format(active_loss.shape, active_loss.dtype))
+                active_logits = logits.reshape([-1, self.num_classes])
+                # print("active_logits: ", active_logits.shape)
+                active_logits = active_logits[active_loss]
+                active_labels = labels.reshape([-1, ])[active_loss]
+                loss = loss_fct(active_logits, active_labels)
+            else:
+                loss = loss_fct(
+                    logits.reshape([-1, self.num_labels]),
+                    labels.reshape([-1, ]))
+            outputs = (loss, ) + outputs
+
+        return outputs
 
 
 class LayoutLMLMPredictionHead(Layer):
@@ -444,12 +475,12 @@ class LayoutLMPretrainingHeads(Layer):
 class LayoutLMForPretraining(LayoutLMPretrainedModel):
     def __init__(self, bert):
         super(LayoutLMForPretraining, self).__init__()
-        self.bert = bert
+        self.layoutlm = bert
         self.cls = LayoutLMPretrainingHeads(
-            self.bert.config["hidden_size"],
-            self.bert.config["vocab_size"],
-            self.bert.config["hidden_act"],
-            embedding_weights=self.bert.embeddings.word_embeddings.weight)
+            self.layoutlm.config["hidden_size"],
+            self.layoutlm.config["vocab_size"],
+            self.layoutlm.config["hidden_act"],
+            embedding_weights=self.layoutlm.embeddings.word_embeddings.weight)
 
         self.apply(self.init_weights)
 
@@ -460,7 +491,7 @@ class LayoutLMForPretraining(LayoutLMPretrainedModel):
                 attention_mask=None,
                 masked_positions=None):
         with paddle.static.amp.fp16_guard():
-            outputs = self.bert(
+            outputs = self.layoutlm(
                 input_ids,
                 token_type_ids=token_type_ids,
                 position_ids=position_ids,

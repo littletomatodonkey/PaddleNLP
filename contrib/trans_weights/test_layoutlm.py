@@ -44,8 +44,8 @@ def test_layoutlm_paddle():
     from paddlenlp.transformers import LayoutLMModel, LayoutLMTokenizer
 
     tokenizer = LayoutLMTokenizer.from_pretrained(
-        "./layoutlm-base-uncased-paddle//")
-    model = LayoutLMModel.from_pretrained("./layoutlm-base-uncased-paddle//")
+        "./layoutlm-base-uncased-paddle/")
+    model = LayoutLMModel.from_pretrained("./layoutlm-base-uncased-paddle/")
     model.eval()
 
     # tokenizer.save_pretrained("./test")
