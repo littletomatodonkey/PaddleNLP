@@ -684,23 +684,22 @@ class LayoutLMv2Model(LayoutLMv2PretrainedModel):
             with_pool='tanh',
             **kwargs, ):
         super().__init__()
-        self.config = config = kwargs
-        self.has_visual_segment_embedding = config.has_visual_segment_embedding
+        config = kwargs
+        self.config = kwargs
+        self.has_visual_segment_embedding = config[
+            "has_visual_segment_embedding"]
         self.embeddings = LayoutLMv2Embeddings(config)
 
         self.visual = VisualBackbone(config)
-        self.visual_proj = nn.Linear(config.image_feature_pool_shape[-1],
-                                     config.hidden_size)
+        self.visual_proj = nn.Linear(config["image_feature_pool_shape"][-1],
+                                     config["hidden_size"])
 
         self.visual_LayerNorm = nn.LayerNorm(
-            config.hidden_size, eps=config.layer_norm_eps)
-        self.visual_dropout = nn.Dropout(config.hidden_dropout_prob)
+            config["hidden_size"], eps=config["layer_norm_eps"])
+        self.visual_dropout = nn.Dropout(config["hidden_dropout_prob"])
 
         self.encoder = LayoutLMv2Encoder(config)
         self.pooler = LayoutLMv2Pooler(config)
-
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_hidden_layers)
-        self.pooler = LayoutLMv2Pooler(config.hidden_size, with_pool)
         self.apply(self.init_weights)
 
     def forward(self,
