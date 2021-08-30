@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
+ * Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -154,6 +155,8 @@ public:
     int buf_size = batch_size_ * hidden_units_;
     return 13 * buf_size + sizeof(DataType_ *) * 9;
   }
+
+  void initialize_stream(cudaStream_t stream) { param_.stream = stream; }
 
   void initialize(TransformerDecoderInitParam<DataType_> param,
                   DataType_ *buf) {

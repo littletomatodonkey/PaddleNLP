@@ -13,11 +13,10 @@
 ![GitHub](https://img.shields.io/github/license/paddlepaddle/paddlenlp)
 
 ## News  <img src="./docs/imgs/news_icon.png" width="40"/>
-
+* [2021-08-22][《千言：面向事实一致性的生成评测比赛》](https://aistudio.baidu.com/aistudio/competition/detail/105)正式开赛啦🔥🔥🔥，欢迎大家踊跃报名!! [PaddleNLP比赛基线地址](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/examples/text_generation/unimo-text)
+* [2021-08-22] PaddleNLP 2.0.8版本已发布！:tada:更多详细升级信息请查看[Release Note](https://github.com/PaddlePaddle/PaddleNLP/releases/tag/v2.0.8).
 * [2021-06-07]《基于深度学习的自然语言处理》直播打卡课正在进行中🔥🔥🔥，快来打卡吧：[https://aistudio.baidu.com/aistudio/course/introduce/24177](https://aistudio.baidu.com/aistudio/course/introduce/24177)
 * [2021-06-04] 新增多粒度语言知识预训练模型[ERNIE-Gram](https://arxiv.org/abs/2010.12148)，多项中文NLP任务取得SOTA成绩，获取2.0.2版本快速体验吧！
-* [2021-05-20] PaddleNLP 2.0正式版已发布！:tada:更多详细升级信息请查看[Release Note](https://github.com/PaddlePaddle/PaddleNLP/releases/tag/v2.0.0).
-
 
 ## 简介
 
@@ -53,7 +52,7 @@ pip install --upgrade paddlenlp
 
 ### Transformer API: 强大的预训练模型生态底座
 
-覆盖**15**个网络结构和**67**个预训练模型参数，既包括百度自研的预训练模型如ERNIE系列, PLATO, SKEP等，也涵盖业界主流的中文预训练模型。也欢迎开发者进预训练模贡献！🤗 
+覆盖**15**个网络结构和**67**个预训练模型参数，既包括百度自研的预训练模型如ERNIE系列, PLATO, SKEP等，也涵盖业界主流的中文预训练模型。也欢迎开发者进预训练模贡献！🤗
 
 ```python
 from paddlenlp.transformers import *
@@ -78,7 +77,7 @@ text = tokenizer('自然语言处理')
 
 # 语义表示
 model = ErnieModel.from_pretrained('ernie-1.0')
-pooled_output, sequence_output = model(input_ids=paddle.to_tensor([text['input_ids']]))
+sequence_output, pooled_output = model(input_ids=paddle.to_tensor([text['input_ids']]))
 # 文本分类 & 句对匹配
 model = ErnieForSequenceClassification.from_pretrained('ernie-1.0')
 # 序列标注
@@ -256,6 +255,8 @@ PaddleNLP提供了多粒度、多场景的NLP应用示例，面向动态图模�
 <div align="center">
   <img src="./docs/imgs/qq.png" width="200" height="200" />
 </div>  
+
+
 
 ## 版本更新
 

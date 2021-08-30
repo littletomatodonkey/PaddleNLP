@@ -11,6 +11,9 @@ PaddleNLP提供了以下数据集的快速读取API，实际使用时请根据�
 |  [DuReader-robust](https://aistudio.baidu.com/aistudio/competition/detail/49) | 千言数据集：阅读理解，答案原文抽取|`paddlenlp.datasets.load_dataset('dureader_robust')` |
 |  [CMRC2018](http://hfl-rc.com/cmrc2018/) | 第二届“讯飞杯”中文机器阅读理解评测数据集|`paddlenlp.datasets.load_dataset('cmrc2018')` |
 |  [DRCD](https://github.com/DRCKnowledgeTeam/DRCD) | 台達閱讀理解資料集|`paddlenlp.datasets.load_dataset('drcd')` |
+|  [TriviaQA](http://nlp.cs.washington.edu/triviaqa/) | Washington大学问答数据集|`paddlenlp.datasets.load_dataset('triviaqa')` |
+|  [C3](https://dataset.org/c3/) | 阅读理解单选题 |`paddlenlp.datasets.load_dataset('c3')` |
+
 
 ## 文本分类
 
@@ -48,6 +51,11 @@ PaddleNLP提供了以下数据集的快速读取API，实际使用时请根据�
 | [THUCNews](https://github.com/gaussic/text-classification-cnn-rnn#%E6%95%B0%E6%8D%AE%E9%9B%86) |  THUCNews中文新闻类别分类 | `paddlenlp.datasets.load_dataset('thucnews')` |
 | [HYP](https://pan.webis.de/semeval19/semeval19-web/) | 英文政治新闻情感分类语料  | `paddlenlp.datasets.load_dataset('hyp')` |
 
+## 文本匹配
+|  数据集名称   | 简介 | 调用方法 |
+|  ----  | --------- | ------ |
+| [CAIL2019-SCM](https://github.com/china-ai-law-challenge/CAIL2019/tree/master/scm) | 相似法律案例匹配  | `paddlenlp.datasets.load_dataset('cail2019_scm')` |
+
 ## 序列标注
 
 |  数据集名称   | 简介 | 调用方法 |
@@ -81,6 +89,9 @@ PaddleNLP提供了以下数据集的快速读取API，实际使用时请根据�
 | ----  | --------- | ------ |
 |  [Poetry](https://github.com/chinese-poetry/chinese-poetry) | 中文诗歌古典文集数据| `paddlenlp.datasets.load_dataset('poetry')`|
 |  [Couplet](https://github.com/v-zich/couplet-clean-dataset) | 中文对联数据集| `paddlenlp.datasets.load_dataset('couplet')`|
+|  [DuReaderQG](https://github.com/PaddlePaddle/Research/tree/master/NLP/DuReader-Robust-BASELINE) | 基于DuReader的问题生成数据集| `paddlenlp.datasets.load_dataset('dureader_qg')`|
+|  [AdvertiseGen](https://github.com/ZhihongShao/Planning-based-Hierarchical-Variational-Model) | 中文文案生成数据集| `paddlenlp.datasets.load_dataset('advertisegen')`|
+|  [LCSTS_new](https://aclanthology.org/D15-1229.pdf) | 中文摘要生成数据集| `paddlenlp.datasets.load_dataset('lcsts_new')`|
 
 ## 语料库
 
