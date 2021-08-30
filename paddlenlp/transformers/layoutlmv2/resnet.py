@@ -1,11 +1,11 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 import numpy as np
-import fvcore.nn.weight_init as weight_init
 import paddle
 import paddle.nn.functional as F
 from paddle import nn
 
-from utils_paddle import (CNNBlockBase, Conv2d, ShapeSpec, get_norm, Backbone)
+from utils_visual_backbone import (CNNBlockBase, Conv2d, ShapeSpec, get_norm,
+                                   Backbone)
 
 __all__ = [
     "ResNetBlockBase",

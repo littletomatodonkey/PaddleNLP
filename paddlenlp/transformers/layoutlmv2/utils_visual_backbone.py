@@ -15,17 +15,12 @@ class Conv2d(nn.Conv2D):
         activation = kwargs.pop("activation", None)
         super().__init__(*args, **kwargs)
 
-        self.stride = self._stride
-        self.padding = self._updated_padding
-        self.dilation = self._dilation
-        self.groups = self._groups
-
         self.norm = norm
         self.activation = activation
 
     def forward(self, x):
-        x = F.conv2d(x, self.weight, self.bias, self.stride, self.padding,
-                     self.dilation, self.groups)
+        input = x
+        x = super().forward(x)
         if self.norm is not None:
             x = self.norm(x)
         if self.activation is not None:
