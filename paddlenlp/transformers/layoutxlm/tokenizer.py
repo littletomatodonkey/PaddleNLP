@@ -43,13 +43,3 @@ class LayoutXLMTokenizer(XLMRobertaTokenizer):
 
     def __init__(self, model_max_length=512, **kwargs):
         super().__init__(model_max_length=model_max_length, **kwargs)
-
-
-if __name__ == '__main__':
-    tokenizer = LayoutXLMTokenizer.from_pretrained('layoutxlm-base')
-    text = "i am 中国人"
-    result = tokenizer.tokenize(text)
-    print(result)
-    tokenizer = XLMRobertaTokenizer.from_pretrained('xlm-roberta-base')
-    result = tokenizer.tokenize(text)
-    print(result)
