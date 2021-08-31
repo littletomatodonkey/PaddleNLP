@@ -681,7 +681,9 @@ class LayoutLMv2Model(LayoutLMv2PretrainedModel):
         self.visual = VisualBackbone(config)
         self.visual_proj = nn.Linear(config["image_feature_pool_shape"][-1],
                                      config["hidden_size"])
-
+        if self.has_visual_segment_embedding:
+            self.visual_segment_embedding = self.create_parameter(
+                shape=[config["hidden_size"], ], dtype=paddle.float32)
         self.visual_LayerNorm = nn.LayerNorm(
             config["hidden_size"], epsilon=config["layer_norm_eps"])
         self.visual_dropout = nn.Dropout(config["hidden_dropout_prob"])
