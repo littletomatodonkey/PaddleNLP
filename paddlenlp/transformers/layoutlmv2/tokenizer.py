@@ -15,10 +15,10 @@
 
 from ..layoutlm.tokenizer import LayoutLMTokenizer
 
-__all__ = ['LayoutLMV2Tokenizer', ]
+__all__ = ['LayoutLMv2Tokenizer', ]
 
 
-class LayoutLMV2Tokenizer(LayoutLMTokenizer):
+class LayoutLMv2Tokenizer(LayoutLMTokenizer):
     """
     Constructs a BERT tokenizer. It uses a basic tokenizer to do punctuation
     splitting, lower casing and so on, and follows a WordPiece tokenizer to
@@ -37,8 +37,8 @@ class LayoutLMV2Tokenizer(LayoutLMTokenizer):
     
     Examples:
         .. code-block:: python
-            from paddle.hapi.text import LayoutLMV2Tokenizer
-            tokenizer = LayoutLMV2Tokenizer.from_pretrained('layoutlmv2-base-uncased')
+            from paddle.hapi.text import LayoutLMv2Tokenizer
+            tokenizer = LayoutLMv2Tokenizer.from_pretrained('layoutlmv2-base-uncased')
             # the following line get: ['he', 'was', 'a', 'puppet', '##eer']
             tokens = tokenizer('He was a puppeteer')
             # the following line get: 'he was a puppeteer'

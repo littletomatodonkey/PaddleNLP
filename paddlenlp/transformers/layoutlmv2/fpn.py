@@ -3,13 +3,13 @@ import paddle
 import paddle.nn.functional as F
 from paddle import nn
 
-from utils_visual_backbone import (
+from .utils_visual_backbone import (
     Conv2d,
     ShapeSpec,
     get_norm,
     Backbone, )
 
-from resnet import build_resnet_backbone
+from .resnet import build_resnet_backbone
 
 __all__ = ["build_resnet_fpn_backbone", "FPN"]
 

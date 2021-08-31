@@ -49,8 +49,6 @@ from .ernie_gram.modeling import *
 from .ernie_gram.tokenizer import *
 from .nezha.modeling import *
 from .nezha.tokenizer import *
-from .layoutlm.modeling import *
-from .layoutlm.tokenizer import *
 from .ernie_doc.modeling import *
 from .ernie_doc.tokenizer import *
 from .bart.modeling import *
@@ -59,3 +57,7 @@ from .roformer.modeling import *
 from .roformer.tokenizer import *
 from .unimo.modeling import *
 from .unimo.tokenizer import *
+from .layoutlm.modeling import *
+from .layoutlm.tokenizer import *
+from .layoutlmv2.modeling import *
+from .layoutlmv2.tokenizer import *

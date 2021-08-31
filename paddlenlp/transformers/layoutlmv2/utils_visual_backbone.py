@@ -19,7 +19,6 @@ class Conv2d(nn.Conv2D):
         self.activation = activation
 
     def forward(self, x):
-        input = x
         x = super().forward(x)
         if self.norm is not None:
             x = self.norm(x)
