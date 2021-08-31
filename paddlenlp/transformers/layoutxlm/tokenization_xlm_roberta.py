@@ -12,7 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """ Tokenization classes for XLM-RoBERTa model."""
 import unicodedata
 import itertools
@@ -22,8 +21,10 @@ from paddle.utils import try_import
 from typing import List, Optional
 
 from .. import PretrainedTokenizer
+from ..tokenizer_utils import _is_punctuation, _is_control, _is_whitespace
 
 SPIECE_UNDERLINE = "▁"
+
 
 @dataclass(frozen=True, eq=True)
 class AddedToken:
@@ -93,12 +94,18 @@ class XLMRobertaTokenizer(PretrainedTokenizer):
     resource_files_names = {"vocab_file": "sentencepiece.bpe.model"}
     pretrained_resource_files_map = {
         "vocab_file": {
-            "xlm-roberta-base": "https://huggingface.co/xlm-roberta-base/resolve/main/sentencepiece.bpe.model",
-            "xlm-roberta-large": "https://huggingface.co/xlm-roberta-large/resolve/main/sentencepiece.bpe.model",
-            "xlm-roberta-large-finetuned-conll02-dutch": "https://huggingface.co/xlm-roberta-large-finetuned-conll02-dutch/resolve/main/sentencepiece.bpe.model",
-            "xlm-roberta-large-finetuned-conll02-spanish": "https://huggingface.co/xlm-roberta-large-finetuned-conll02-spanish/resolve/main/sentencepiece.bpe.model",
-            "xlm-roberta-large-finetuned-conll03-english": "https://huggingface.co/xlm-roberta-large-finetuned-conll03-english/resolve/main/sentencepiece.bpe.model",
-            "xlm-roberta-large-finetuned-conll03-german": "https://huggingface.co/xlm-roberta-large-finetuned-conll03-german/resolve/main/sentencepiece.bpe.model",
+            "xlm-roberta-base":
+            "https://huggingface.co/xlm-roberta-base/resolve/main/sentencepiece.bpe.model",
+            "xlm-roberta-large":
+            "https://huggingface.co/xlm-roberta-large/resolve/main/sentencepiece.bpe.model",
+            "xlm-roberta-large-finetuned-conll02-dutch":
+            "https://huggingface.co/xlm-roberta-large-finetuned-conll02-dutch/resolve/main/sentencepiece.bpe.model",
+            "xlm-roberta-large-finetuned-conll02-spanish":
+            "https://huggingface.co/xlm-roberta-large-finetuned-conll02-spanish/resolve/main/sentencepiece.bpe.model",
+            "xlm-roberta-large-finetuned-conll03-english":
+            "https://huggingface.co/xlm-roberta-large-finetuned-conll03-english/resolve/main/sentencepiece.bpe.model",
+            "xlm-roberta-large-finetuned-conll03-german":
+            "https://huggingface.co/xlm-roberta-large-finetuned-conll03-german/resolve/main/sentencepiece.bpe.model",
         }
     }
     pretrained_init_configuration = {
@@ -143,19 +150,19 @@ class XLMRobertaTokenizer(PretrainedTokenizer):
         "additional_special_tokens",
     ]
 
-    def __init__(
-            self,
-            vocab_file,
-            bos_token="<s>",
-            eos_token="</s>",
-            sep_token="</s>",
-            cls_token="<s>",
-            unk_token="<unk>",
-            pad_token="<pad>",
-            mask_token="<mask>",
-            **kwargs
-    ):
-        mask_token = AddedToken(mask_token, lstrip=True, rstrip=False) if isinstance(mask_token, str) else mask_token
+    def __init__(self,
+                 vocab_file,
+                 bos_token="<s>",
+                 eos_token="</s>",
+                 sep_token="</s>",
+                 cls_token="<s>",
+                 unk_token="<unk>",
+                 pad_token="<pad>",
+                 mask_token="<mask>",
+                 **kwargs):
+        mask_token = AddedToken(
+            mask_token, lstrip=True,
+            rstrip=False) if isinstance(mask_token, str) else mask_token
         self._bos_token = bos_token
         self._eos_token = eos_token
         self._sep_token = sep_token
@@ -175,17 +182,26 @@ class XLMRobertaTokenizer(PretrainedTokenizer):
         # spm      | '<unk>' | '<s>'   | '</s>' | ','     | '.' | '▁' | 's' | '▁de' | '-'   | '▁a'
 
         # Mimic fairseq token-to-id alignment for the first 4 token
-        self.fairseq_tokens_to_ids = {"<s>": 0, "<pad>": 1, "</s>": 2, "<unk>": 3}
+        self.fairseq_tokens_to_ids = {
+            "<s>": 0,
+            "<pad>": 1,
+            "</s>": 2,
+            "<unk>": 3
+        }
 
         # The first "real" token "," has position 4 in the original fairseq vocab and position 3 in the spm vocab
         self.fairseq_offset = 1
 
-        self.fairseq_tokens_to_ids["<mask>"] = len(self.sp_model) + self.fairseq_offset
-        self.fairseq_ids_to_tokens = {v: k for k, v in self.fairseq_tokens_to_ids.items()}
+        self.fairseq_tokens_to_ids["<mask>"] = len(
+            self.sp_model) + self.fairseq_offset
+        self.fairseq_ids_to_tokens = {
+            v: k
+            for k, v in self.fairseq_tokens_to_ids.items()
+        }
 
     def build_inputs_with_special_tokens(
-            self, token_ids_0: List[int], token_ids_1: Optional[List[int]] = None
-    ) -> List[int]:
+            self, token_ids_0: List[int],
+            token_ids_1: Optional[List[int]]=None) -> List[int]:
         """
         Build model inputs from a sequence or a pair of sequence for sequence classification tasks by concatenating and
         adding special tokens. An XLM-RoBERTa sequence has the following format:
@@ -210,9 +226,10 @@ class XLMRobertaTokenizer(PretrainedTokenizer):
         return cls + token_ids_0 + sep + sep + token_ids_1 + sep
 
     def get_special_tokens_mask(
-            self, token_ids_0: List[int], token_ids_1: Optional[List[int]] = None,
-            already_has_special_tokens: bool = False
-    ) -> List[int]:
+            self,
+            token_ids_0: List[int],
+            token_ids_1: Optional[List[int]]=None,
+            already_has_special_tokens: bool=False) -> List[int]:
         """
         Retrieve sequence ids from a token list that has no special tokens added. This method is called when adding
         special tokens using the tokenizer ``prepare_for_model`` method.
@@ -235,15 +252,18 @@ class XLMRobertaTokenizer(PretrainedTokenizer):
                     "You should not supply a second sequence if the provided sequence of "
                     "ids is already formatted with special tokens for the model."
                 )
-            return list(map(lambda x: 1 if x in [self.sep_token_id, self.cls_token_id] else 0, token_ids_0))
+            return list(
+                map(lambda x: 1 if x in [self.sep_token_id, self.cls_token_id] else 0,
+                    token_ids_0))
 
         if token_ids_1 is None:
             return [1] + ([0] * len(token_ids_0)) + [1]
-        return [1] + ([0] * len(token_ids_0)) + [1, 1] + ([0] * len(token_ids_1)) + [1]
+        return [1] + ([0] * len(token_ids_0)) + [1, 1] + ([0] * len(token_ids_1)
+                                                          ) + [1]
 
     def create_token_type_ids_from_sequences(
-            self, token_ids_0: List[int], token_ids_1: Optional[List[int]] = None
-    ) -> List[int]:
+            self, token_ids_0: List[int],
+            token_ids_1: Optional[List[int]]=None) -> List[int]:
         """
         Create a mask from the two sequences passed to be used in a sequence-pair classification task. XLM-RoBERTa does
         not make use of token type ids, therefore a list of zeros is returned.
@@ -268,10 +288,14 @@ class XLMRobertaTokenizer(PretrainedTokenizer):
 
     @property
     def vocab_size(self):
-        return len(self.sp_model) + self.fairseq_offset + 1  # Add the <mask> token
+        return len(
+            self.sp_model) + self.fairseq_offset + 1  # Add the <mask> token
 
     def get_vocab(self):
-        vocab = {self.convert_ids_to_tokens(i): i for i in range(self.vocab_size)}
+        vocab = {
+            self.convert_ids_to_tokens(i): i
+            for i in range(self.vocab_size)
+        }
         vocab.update(self.added_tokens_encoder)
         return vocab
 
@@ -303,7 +327,8 @@ class XLMRobertaTokenizer(PretrainedTokenizer):
         all_toks = []
         set_attr = self.special_tokens_map_extended()
         for attr_value in set_attr.values():
-            all_toks = all_toks + (list(attr_value) if isinstance(attr_value, (list, tuple)) else [attr_value])
+            all_toks = all_toks + (list(attr_value) if isinstance(attr_value, (
+                list, tuple)) else [attr_value])
         all_toks = list(OrderedDict.fromkeys(all_toks))
         return all_toks
 
@@ -325,8 +350,8 @@ class XLMRobertaTokenizer(PretrainedTokenizer):
         """
         # Simple mapping string => AddedToken for special tokens with specific tokenization behaviors
         all_special_tokens_extended = dict(
-            (t.content, t) for t in self.all_special_tokens_extended() if isinstance(t, AddedToken)
-        )
+            (t.content, t) for t in self.all_special_tokens_extended()
+            if isinstance(t, AddedToken))
 
         def split_on_token(tok, text):
             result = []
@@ -345,11 +370,9 @@ class XLMRobertaTokenizer(PretrainedTokenizer):
                 if isinstance(tok_extended, AddedToken):
                     if tok_extended.single_word:
                         # Try to avoid splitting on token
-                        if (
-                                i < len(split_text) - 1
-                                and not _is_end_of_word(sub_text)
-                                and not _is_start_of_word(split_text[i + 1])
-                        ):
+                        if (i < len(split_text) - 1 and
+                                not _is_end_of_word(sub_text) and
+                                not _is_start_of_word(split_text[i + 1])):
                             # Don't extract the special token
                             full_word += sub_text + tok
                         elif full_word:
@@ -403,13 +426,9 @@ class XLMRobertaTokenizer(PretrainedTokenizer):
                 text_list = tokenized_text
 
             return list(
-                itertools.chain.from_iterable(
-                    (
-                        self._tokenize(token) if token not in self.all_special_tokens_extended() else [token]
-                        for token in tokenized_text
-                    )
-                )
-            )
+                itertools.chain.from_iterable((self._tokenize(
+                    token) if token not in self.all_special_tokens_extended(
+                    ) else [token] for token in tokenized_text)))
 
         no_split_token = self.all_special_tokens_extended()
         tokenized_text = split_on_tokens(no_split_token, text)
@@ -442,49 +461,14 @@ class XLMRobertaTokenizer(PretrainedTokenizer):
 def _is_end_of_word(text):
     """Checks whether the last character in text is one of a punctuation, control or whitespace character."""
     last_char = text[-1]
-    return bool(_is_control(last_char) | _is_punctuation(last_char) | _is_whitespace(last_char))
+    return bool(
+        _is_control(last_char) | _is_punctuation(last_char) | _is_whitespace(
+            last_char))
 
 
 def _is_start_of_word(text):
     """Checks whether the first character in text is one of a punctuation, control or whitespace character."""
     first_char = text[0]
-    return bool(_is_control(first_char) | _is_punctuation(first_char) | _is_whitespace(first_char))
-
-
-def _is_whitespace(char):
-    """Checks whether `char` is a whitespace character."""
-    # \t, \n, and \r are technically control characters but we treat them
-    # as whitespace since they are generally considered as such.
-    if char == " " or char == "\t" or char == "\n" or char == "\r":
-        return True
-    cat = unicodedata.category(char)
-    if cat == "Zs":
-        return True
-    return False
-
-
-def _is_control(char):
-    """Checks whether `char` is a control character."""
-    # These are technically control characters but we count them as whitespace
-    # characters.
-    if char == "\t" or char == "\n" or char == "\r":
-        return False
-    cat = unicodedata.category(char)
-    if cat.startswith("C"):
-        return True
-    return False
-
-
-def _is_punctuation(char):
-    """Checks whether `char` is a punctuation character."""
-    cp = ord(char)
-    # We treat all non-letter/number ASCII as punctuation.
-    # Characters such as "^", "$", and "`" are not in the Unicode
-    # Punctuation class but we treat them as punctuation anyways, for
-    # consistency.
-    if (cp >= 33 and cp <= 47) or (cp >= 58 and cp <= 64) or (cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126):
-        return True
-    cat = unicodedata.category(char)
-    if cat.startswith("P"):
-        return True
-    return False
+    return bool(
+        _is_control(first_char) | _is_punctuation(first_char) | _is_whitespace(
+            first_char))

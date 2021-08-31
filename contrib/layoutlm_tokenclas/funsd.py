@@ -5,7 +5,7 @@ import paddle
 from paddle.io import Dataset
 
 logger = logging.getLogger(__name__)
-
+import numpy as np
 
 class FunsdDataset(Dataset):
     def __init__(self, args, tokenizer, labels, pad_token_label_id, mode):
@@ -27,7 +27,8 @@ class FunsdDataset(Dataset):
             # pad on the left for xlnet
             pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
             pad_token_segment_id=4 if args.model_type in ["xlnet"] else 0,
-            pad_token_label_id=pad_token_label_id, )
+            pad_token_label_id=pad_token_label_id,
+            model_type=args.model_type)
 
         self.features = features
         # Convert to Tensors and build dataset
@@ -190,7 +191,8 @@ def convert_examples_to_features(
         pad_token_segment_id=0,
         pad_token_label_id=-1,
         sequence_a_segment_id=0,
-        mask_padding_with_zero=True, ):
+        mask_padding_with_zero=True,
+        model_type="bert"):
     """ Loads a data file into a list of `InputBatch`s
         `cls_token_at_end` define the location of the CLS token:
             - False (Default, BERT/XLM pattern): [CLS] + A + [SEP] + B + [SEP]
@@ -303,20 +305,28 @@ def convert_examples_to_features(
         assert len(segment_ids) == max_seq_length
         assert len(label_ids) == max_seq_length
         assert len(token_boxes) == max_seq_length
+        
+        if model_type != "layoutlm":
+            input_mask = np.array(input_mask)
+            input_mask = np.reshape(input_mask.astype(np.float32), 
+                [1, 1, input_mask.shape[0]])
 
-        if ex_index < 5:
-            logger.info("*** Example ***")
-            logger.info("guid: %s", example.guid)
-            logger.info("tokens: %s", " ".join([str(x) for x in tokens]))
-            logger.info("input_ids: %s", " ".join([str(x) for x in input_ids]))
-            logger.info("input_mask: %s",
-                        " ".join([str(x) for x in input_mask]))
-            logger.info("segment_ids: %s",
-                        " ".join([str(x) for x in segment_ids]))
-            logger.info("label_ids: %s", " ".join([str(x) for x in label_ids]))
-            logger.info("boxes: %s", " ".join([str(x) for x in token_boxes]))
-            logger.info("actual_bboxes: %s",
-                        " ".join([str(x) for x in actual_bboxes]))
+#         input_mask = (1 - np.reshape(input_mask.astype(np.float32), 
+#             [1, 1, input_mask.shape[0]])) * -1e9
+
+#         if ex_index < 5:
+#             logger.info("*** Example ***")
+#             logger.info("guid: %s", example.guid)
+#             logger.info("tokens: %s", " ".join([str(x) for x in tokens]))
+#             logger.info("input_ids: %s", " ".join([str(x) for x in input_ids]))
+#             logger.info("input_mask: %s",
+#                         " ".join([str(x) for x in input_mask]))
+#             logger.info("segment_ids: %s",
+#                         " ".join([str(x) for x in segment_ids]))
+#             logger.info("label_ids: %s", " ".join([str(x) for x in label_ids]))
+#             logger.info("boxes: %s", " ".join([str(x) for x in token_boxes]))
+#             logger.info("actual_bboxes: %s",
+#                         " ".join([str(x) for x in actual_bboxes]))
 
         features.append(
             InputFeatures(
