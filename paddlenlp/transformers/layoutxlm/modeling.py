@@ -1,5 +1,10 @@
 from .. import PretrainedModel, register_base_model
-from ..layoutlmv2.modeling import LayoutLMv2Model
+from ..layoutlmv2.modeling import LayoutLMv2Model, LayoutLMv2ForTokenClassification
+
+__all__ = [
+    "LayoutXLMModel",
+    "LayoutXLMForTokenClassification",
+]
 
 
 @register_base_model
@@ -50,3 +55,6 @@ class LayoutXLMModel(LayoutLMv2Model):
         }
     }
     base_model_prefix = "layoutlmv2"
+
+
+LayoutXLMForTokenClassification = LayoutLMv2ForTokenClassification

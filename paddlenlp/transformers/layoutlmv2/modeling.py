@@ -29,6 +29,7 @@ from ..layoutlm.modeling import LayoutLMPooler as LayoutLMv2Pooler
 __all__ = [
     'LayoutLMv2Model',
     "LayoutLMv2PretrainedModel",
+    "LayoutLMv2ForTokenClassification",
 ]
 
 
@@ -827,3 +828,65 @@ class LayoutLMv2Model(LayoutLMv2PretrainedModel):
         pooled_output = self.pooler(sequence_output)
 
         return sequence_output, pooled_output
+
+
+class LayoutLMv2ForTokenClassification(LayoutLMv2PretrainedModel):
+    def __init__(self, layoutlm, num_classes=2, dropout=None):
+        super().__init__()
+        self.num_classes = num_classes
+        self.layoutlmv2 = layoutlm
+
+        self.dropout = nn.Dropout(dropout if dropout is not None else
+                                  self.layoutlmv2.config["hidden_dropout_prob"])
+        self.classifier = nn.Linear(self.layoutlmv2.config["hidden_size"],
+                                    num_classes)
+        self.dropout.apply(self.init_weights)
+        self.classifier.apply(self.init_weights)
+
+    def get_input_embeddings(self):
+        return self.layoutlmv2.embeddings.word_embeddings
+
+    def forward(
+            self,
+            input_ids=None,
+            bbox=None,
+            image=None,
+            attention_mask=None,
+            token_type_ids=None,
+            position_ids=None,
+            head_mask=None,
+            labels=None, ):
+        outputs = self.layoutlmv2(
+            input_ids=input_ids,
+            bbox=bbox,
+            image=image,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask, )
+        seq_length = input_ids.shape[1]
+        # sequence out and image out
+        sequence_output, image_output = outputs[0][:, :seq_length], outputs[
+            0][:, seq_length:]
+        sequence_output = self.dropout(sequence_output)
+        logits = self.classifier(sequence_output)
+
+        outputs = (logits, )  # + outputs[2:]
+
+        if labels is not None:
+            loss_fct = nn.CrossEntropyLoss()
+
+            if attention_mask is not None:
+                active_loss = attention_mask.reshape([-1, ]) == 1
+                active_logits = logits.reshape(
+                    [-1, self.num_classes])[active_loss]
+                active_labels = labels.reshape([-1, ])[active_loss]
+                loss = loss_fct(active_logits, active_labels)
+            else:
+                loss = loss_fct(
+                    logits.reshape([-1, self.num_classes]),
+                    labels.reshape([-1, ]))
+
+            outputs = (loss, ) + outputs
+
+        return outputs

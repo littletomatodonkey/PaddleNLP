@@ -415,7 +415,7 @@ class LayoutLMForTokenClassification(LayoutLMPretrainedModel):
                 loss = loss_fct(active_logits, active_labels)
             else:
                 loss = loss_fct(
-                    logits.reshape([-1, self.num_labels]),
+                    logits.reshape([-1, self.num_classes]),
                     labels.reshape([-1, ]))
             outputs = (loss, ) + outputs
 
