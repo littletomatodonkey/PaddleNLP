@@ -457,6 +457,70 @@ class XLMRobertaTokenizer(PretrainedTokenizer):
         out_string = "".join(tokens).replace(SPIECE_UNDERLINE, " ").strip()
         return out_string
 
+    def convert_tokens_to_ids(self, tokens):
+        """
+        Converts a token (or a sequence of tokens) to a single integer id (or a sequence of ids),
+        using the vocabulary.
+
+        Args:
+            tokens (str or List[str]):
+                One or several token(s) to convert to token id(s).
+
+        Returns:
+            int or List[int] or tuple(int): The token id or list of token ids or tuple of token ids.
+        """
+        if not isinstance(tokens, (list, tuple)):
+            return self._convert_token_to_id(tokens)
+        else:
+            return [self._convert_token_to_id(token) for token in tokens]
+
+    def convert_ids_to_tokens(self, ids, skip_special_tokens=False):
+        """
+        Converts a single index or a sequence of indices to a token or
+        a sequence of tokens, using the vocabulary and added tokens.
+
+        Args:
+            ids (int or List[int]):
+                The token id (or token ids) to be converted to token(s).
+            skip_special_tokens (bool, optional):
+                Whether or not to remove special tokens in the decoding.
+                Defaults to `False` and we do not remove special tokens.
+
+        Returns:
+            str or List[str]: The decoded token(s).
+        """
+        if not isinstance(ids, (list, tuple)):
+            return self._convert_id_to_token(ids)
+        tokens = [self._convert_id_to_token(_id) for _id in ids]
+        if skip_special_tokens:
+            return [
+                token for token in tokens
+                if token not in self.all_special_tokens
+            ]
+        return tokens
+
+    def num_special_tokens_to_add(self, pair=False):
+        """
+        Returns the number of added tokens when encoding a sequence with special tokens.
+
+        Note:
+            This encodes inputs and checks the number of added tokens, and is therefore not efficient.
+            Do not put this inside your training loop.
+
+        Args:
+            pair (bool, optional):
+                Whether the input is a sequence pair or a single sequence.
+                Defaults to `False` and the input is a single sequence.
+
+        Returns:
+            int: Number of tokens added to sequences.
+        """
+        token_ids_0 = []
+        token_ids_1 = []
+        return len(
+            self.build_inputs_with_special_tokens(token_ids_0, token_ids_1
+                                                  if pair else None))
+
 
 def _is_end_of_word(text):
     """Checks whether the last character in text is one of a punctuation, control or whitespace character."""
