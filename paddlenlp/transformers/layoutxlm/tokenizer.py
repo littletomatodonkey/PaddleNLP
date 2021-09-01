@@ -22,8 +22,10 @@ class LayoutXLMTokenizer(XLMRobertaTokenizer):
     resource_files_names = {"vocab_file": "sentencepiece.bpe.model"}
     pretrained_resource_files_map = {
         "vocab_file": {
-            "layoutxlm-base": "https://huggingface.co/microsoft/layoutxlm-base/resolve/main/sentencepiece.bpe.model",
-            "layoutxlm-large": "https://huggingface.co/microsoft/layoutxlm-large/resolve/main/sentencepiece.bpe.model",
+            "layoutxlm-base":
+            "https://huggingface.co/microsoft/layoutxlm-base/resolve/main/sentencepiece.bpe.model",
+            "layoutxlm-large":
+            "https://huggingface.co/microsoft/layoutxlm-large/resolve/main/sentencepiece.bpe.model",
         }
     }
     pretrained_init_configuration = {
@@ -41,5 +43,7 @@ class LayoutXLMTokenizer(XLMRobertaTokenizer):
     max_model_input_sizes = pretrained_positional_embedding_sizes
     model_input_names = ["input_ids", "attention_mask"]
 
-    def __init__(self, model_max_length=512, **kwargs):
-        super().__init__(model_max_length=model_max_length, **kwargs)
+    # def __init__(self, model_max_length=512, **kwargs):
+
+
+# super().__init__(model_max_length=model_max_length, **kwargs)
