@@ -225,9 +225,9 @@ class LayoutLMv2PretrainedModel(PretrainedModel):
                 layer.weight.set_value(
                     paddle.tensor.normal(
                         mean=0.0,
-                        std=self.config["initializer_range"]
-                        if "initializer_range" in self.config else
-                        self.layoutlmv2.config["initializer_range"],
+                        std=self.pretrained_init_configuration[
+                            "initializer_range"] if "initializer_range" in
+                        self.pretrained_init_configuration else 0.02,
                         shape=layer.weight.shape))
 
 
@@ -729,7 +729,6 @@ class LayoutLMv2Model(LayoutLMv2PretrainedModel):
                 head_mask=None,
                 output_hidden_states=None,
                 output_attentions=None):
-
         input_shape = input_ids.shape
 
         visual_shape = list(input_shape)

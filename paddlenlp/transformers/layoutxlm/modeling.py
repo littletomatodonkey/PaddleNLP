@@ -40,7 +40,6 @@ class LayoutXLMModel(LayoutLMv2Model):
             "shape_size": 128,
             "rel_2d_pos_bins": 64,
             "rel_pos_bins": 32,
-            "transformers_version": "4.5.1",
             "type_vocab_size": 1,
             "vocab_size": 250002,
             "tokenizer_class": "XLMRobertaTokenizer",
@@ -57,4 +56,7 @@ class LayoutXLMModel(LayoutLMv2Model):
     base_model_prefix = "layoutlmv2"
 
 
-LayoutXLMForTokenClassification = LayoutLMv2ForTokenClassification
+@register_base_model
+class LayoutXLMForTokenClassification(LayoutLMv2ForTokenClassification):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
