@@ -27,7 +27,7 @@ from xfun_dataset import XfunDatasetxForSer
 
 def get_labels(path):
     labels = [
-        "other",
+        "O",
         "b-question",
         "b-answer",
         "b-header",
@@ -84,6 +84,8 @@ def train(args):
     train_dataloader = paddle.io.DataLoader(
         train_dataset,
         batch_sampler=train_sampler,
+        num_workers=8,
+        use_shared_memory=True,
         collate_fn=None, )
 
     t_total = len(train_dataloader
@@ -143,13 +145,15 @@ def train(args):
                 "label_ids": batch[1],
                 "token_type_ids": batch[2],
                 "bbox": batch[3],
-                "image": batch[4],
+                "attention_mask": batch[4],
+                "image": batch[5],
             }
             outputs = model(
                 input_ids=inputs["input_ids"],
                 bbox=inputs["bbox"],
                 image=inputs["image"],
                 token_type_ids=inputs["token_type_ids"],
+                attention_mask=inputs["attention_mask"],
                 labels=inputs["label_ids"])
             # model outputs are always tuple in ppnlp (see doc)
             loss = outputs[0]
@@ -225,6 +229,8 @@ def evaluate(args,
     eval_dataloader = paddle.io.DataLoader(
         eval_dataset,
         batch_size=args.eval_batch_size,
+        num_workers=8,
+        use_shared_memory=True,
         collate_fn=None, )
 
     # Eval!
@@ -243,7 +249,8 @@ def evaluate(args,
                 "label_ids": batch[1],
                 "token_type_ids": batch[2],
                 "bbox": batch[3],
-                "image": batch[4],
+                "attention_mask": batch[4],
+                "image": batch[5],
             }
 
             outputs = model(
@@ -251,6 +258,7 @@ def evaluate(args,
                 bbox=inputs["bbox"],
                 image=inputs["image"],
                 token_type_ids=inputs["token_type_ids"],
+                attention_mask=inputs["attention_mask"],
                 labels=inputs["label_ids"])
             tmp_eval_loss, logits = outputs[:2]
 

@@ -34,18 +34,21 @@ class XfunDatasetxForSer(Dataset):
         print("image shape: ", data["image"].shape)
     """
 
-    def __init__(self,
-                 tokenizer,
-                 data_dir,
-                 label_path,
-                 img_size=(224, 224),
-                 pad_token_label_id=None,
-                 add_special_ids=False):
+    def __init__(
+            self,
+            tokenizer,
+            data_dir,
+            label_path,
+            img_size=(224, 224),
+            pad_token_label_id=None,
+            add_special_ids=False,
+            return_attention_mask=True, ):
         self.tokenizer = tokenizer
         self.data_dir = data_dir
         self.label_path = label_path
         self.add_special_ids = add_special_ids
         self.pad_token_label_id = pad_token_label_id
+        self.return_attention_mask = return_attention_mask
         if self.pad_token_label_id is None:
             self.pad_token_label_id = paddle.nn.CrossEntropyLoss().ignore_index
         self.all_lines = self.read_all_lines()
@@ -64,7 +67,7 @@ class XfunDatasetxForSer(Dataset):
                       encoded_inputs,
                       max_seq_len=512,
                       pad_to_max_seq_len=True,
-                      return_attention_mask=False,
+                      return_attention_mask=True,
                       return_token_type_ids=True,
                       truncation_strategy="longest_first",
                       return_overflowing_tokens=False,
@@ -161,7 +164,8 @@ class XfunDatasetxForSer(Dataset):
             bbox[3] = int(bbox[3] * 1000.0 / height)
 
             text = info["text"]
-            encode_res = self.tokenizer.encode(text, pad_to_max_seq_len=False)
+            encode_res = self.tokenizer.encode(
+                text, pad_to_max_seq_len=False, return_attention_mask=True)
 
             gt_label = []
             if not self.add_special_ids:
@@ -169,12 +173,14 @@ class XfunDatasetxForSer(Dataset):
                 encode_res["input_ids"] = encode_res["input_ids"][1:-1]
                 encode_res["token_type_ids"] = encode_res["token_type_ids"][1:
                                                                             -1]
-                if label.lower() == "other":
-                    gt_label.extend([0] * len(encode_res["input_ids"]))
-                else:
-                    gt_label.append(self.label_to_id[("b-" + label).lower()])
-                    gt_label.extend([self.label_to_id[("i-" + label).lower()]] *
-                                    (len(encode_res["input_ids"]) - 1))
+                encode_res["attention_mask"] = encode_res["attention_mask"][1:
+                                                                            -1]
+            if label.lower() == "other":
+                gt_label.extend([0] * len(encode_res["input_ids"]))
+            else:
+                gt_label.append(self.label_to_id[("b-" + label).lower()])
+                gt_label.extend([self.label_to_id[("i-" + label).lower()]] *
+                                (len(encode_res["input_ids"]) - 1))
 
             input_ids_list.extend(encode_res["input_ids"])
             token_type_ids_list.extend(encode_res["token_type_ids"])
@@ -187,10 +193,12 @@ class XfunDatasetxForSer(Dataset):
             "label_ids": gt_label_list,
             "token_type_ids": token_type_ids_list,
             "bbox": bbox_list,
+            "attention_mask": [1] * len(input_ids_list),
             # "words_list": words_list,
         }
 
-        encoded_inputs = self.pad_sentences(encoded_inputs)
+        encoded_inputs = self.pad_sentences(
+            encoded_inputs, return_attention_mask=self.return_attention_mask)
         encoded_inputs = self.truncate_inputs(encoded_inputs)
 
         encoded_inputs["image"] = img
@@ -205,6 +213,8 @@ class XfunDatasetxForSer(Dataset):
             np.array(
                 encoded_inputs["bbox"], dtype=np.int64),
             np.array(
+                encoded_inputs["attention_mask"], dtype=np.int64),
+            np.array(
                 encoded_inputs["image"], dtype=np.float32),
         ]
         # print("===begin===")
@@ -214,6 +224,8 @@ class XfunDatasetxForSer(Dataset):
         return res
 
     def __getitem__(self, idx):
+        res = self.parse_label_file(self.all_lines[idx])
+        return res
         try:
             res = self.parse_label_file(self.all_lines[idx])
             return res

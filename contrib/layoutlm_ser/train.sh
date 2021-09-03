@@ -12,9 +12,9 @@ python3.7 train.py \
     --num_train_epochs 200 \
     --logging_steps 10 \
     --save_steps 1000 \
-    --output_dir "output_v2/" \
+    --output_dir "output_v3/" \
     --labels "./SROIE/anno/labels.txt" \
     --learning_rate 5e-5 \
-    --per_gpu_train_batch_size 8 \
+    --per_gpu_train_batch_size 12 \
     --per_gpu_eval_batch_size 8 \
     --evaluate_during_training
