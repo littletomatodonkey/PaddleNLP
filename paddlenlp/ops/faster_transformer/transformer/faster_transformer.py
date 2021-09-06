@@ -354,7 +354,6 @@ class TransformerGenerator(paddle.nn.Layer):
         max_out_len (int, optional):
             The maximum output length. Defaults to 256.
         kwargs:
-<<<<<<< HEAD
             The key word arguments can be `output_time_major`, `use_fp16_decoding` and `use_ft`.
             `output_time_major(bool, optional)`: Indicate the data layout of predicted
             Tensor. If `False`, the data layout would be batch major with shape
@@ -363,41 +362,6 @@ class TransformerGenerator(paddle.nn.Layer):
             to `False`. `use_fp16_decoding(bool, optional)`: Whether to use fp16
             for decoding. `use_ft(bool, optional)`: Whether to use Faster Transformer
             for decoding. 
-=======
-            The key word arguments can be `output_time_major`, `use_ft`, `use_fp16_decoding`,
-            `rel_len`, `alpha`:
-
-            - `output_time_major(bool, optional)`: Indicate the data layout of predicted
-            Tensor. If `False`, the data layout would be batch major with shape
-            `[batch_size, seq_len, beam_size]`. If  `True`, the data layout would
-            be time major with shape `[seq_len, batch_size, beam_size]`. Default
-            to `False`. 
-
-            - `use_ft(bool, optional)`: Whether to use Faster Transformer
-            for decoding. Default to True if not set.
-
-            - `use_fp16_decoding(bool, optional)`: Whether to use fp16
-            for decoding.  Only works when using Faster Transformer.
-
-            - `beam_search_version(str, optional)`: Indicating the strategy of
-            beam search. It can be 'v1' or 'v2'. 'v2' would select the top
-            `beam_size * 2` beams and process the top `beam_size` alive and
-            finish beams in them separately, while 'v1' would only select the
-            top `beam_size` beams and mix up the alive and finish beams. 'v2' always
-            searchs more and get better results, since the alive beams would
-            always be `beam_size` while the number of alive beams in `v1` might
-            decrease when meeting the end token. However, 'v2' always generates
-            longer results thus might do more calculation and be slower.
-
-            - `rel_len(bool, optional)`: Indicating whether `max_out_len` in is
-            the length relative to that of source text. Only works in `v2` temporarily.
-            It is suggest to set a small `max_out_len` and use `rel_len=True`.
-            Default to False if not set.
-
-            - `alpha(float, optional)`: The power number in length penalty
-            calculation. Refer to `GNMT <https://arxiv.org/pdf/1609.08144.pdf>`_.
-            Only works in `v2` temporarily. Default to 0.6 if not set.
->>>>>>> bb6be208584120612d6a2473226cc6b0157cdbfa
     """
 
     def __init__(self,
