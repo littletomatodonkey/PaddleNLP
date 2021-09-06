@@ -22,7 +22,8 @@ import os
 
 
 def _get_user_home():
-    return os.path.expanduser('~')
+    #return os.path.expanduser('~')
+   return './'
 
 
 def _get_ppnlp_home():

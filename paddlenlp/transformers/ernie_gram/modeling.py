@@ -23,6 +23,7 @@ __all__ = [
     'ErnieGramForSequenceClassification',
     'ErnieGramForTokenClassification',
     'ErnieGramForQuestionAnswering',
+    'ErnieGramForPretraining',
 ]
 
 
@@ -567,3 +568,159 @@ class ErnieGramForSequenceClassification(ErnieGramPretrainedModel):
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
         return logits
+
+
+class ErnieGramLMPredictionHead(nn.Layer):
+    r"""
+    Bert Model with a `language modeling` head on top.
+    """
+
+    def __init__(
+            self,
+            hidden_size,
+            vocab_size,
+            activation,
+            embedding_weights=None,
+            weight_attr=None, ):
+        super(ErnieGramLMPredictionHead, self).__init__()
+
+        self.transform = nn.Linear(
+            hidden_size, hidden_size, weight_attr=weight_attr)
+        self.activation = getattr(nn.functional, activation)
+        self.layer_norm = nn.LayerNorm(hidden_size)
+        self.decoder_weight = self.create_parameter(
+            shape=[vocab_size, hidden_size],
+            dtype=self.transform.weight.dtype,
+            attr=weight_attr,
+            is_bias=False) if embedding_weights is None else embedding_weights
+        self.decoder_bias = self.create_parameter(
+            shape=[vocab_size], dtype=self.decoder_weight.dtype, is_bias=True)
+
+    def forward(self, hidden_states, masked_positions=None):
+        if masked_positions is not None:
+            hidden_states = paddle.reshape(hidden_states,
+                                           [-1, hidden_states.shape[-1]])
+            hidden_states = paddle.tensor.gather(hidden_states,
+                                                 masked_positions)
+        # gather masked tokens might be more quick
+        hidden_states = self.transform(hidden_states)
+        hidden_states = self.activation(hidden_states)
+        hidden_states = self.layer_norm(hidden_states)
+        hidden_states = paddle.tensor.matmul(
+            hidden_states, self.decoder_weight,
+            transpose_y=True) + self.decoder_bias
+        return hidden_states
+    
+class ErnieGramPretrainingHeads(nn.Layer):
+    def __init__(
+            self,
+            hidden_size,
+            vocab_size,
+            activation,
+            embedding_weights=None,
+            weight_attr=None, ):
+        super(ErnieGramPretrainingHeads, self).__init__()
+        self.predictions = ErnieGramLMPredictionHead(
+            hidden_size, vocab_size, activation, embedding_weights, weight_attr)
+#         self.seq_relationship = nn.Linear(
+#             hidden_size, 2, weight_attr=weight_attr)
+
+    def forward(self, sequence_output, pooled_output, masked_positions=None):
+        prediction_scores = self.predictions(sequence_output, masked_positions)
+        return prediction_scores
+#         seq_relationship_score = self.seq_relationship(pooled_output)
+#         return prediction_scores, seq_relationship_score
+    
+class ErnieGramForPretraining(ErnieGramPretrainedModel):
+    r"""
+    Bert Model with two heads on top as done during the pretraining: 
+    a `masked language modeling` head and a `next sentence prediction (classification)` head.
+
+    """
+
+    def __init__(self, ernie_gram):
+        super(ErnieGramForPretraining, self).__init__()
+        self.ernie_gram = ernie_gram
+        weight_attr = paddle.ParamAttr(initializer=nn.initializer.Normal(
+            mean=0.0, std=self.ernie_gram.initializer_range))
+        self.cls = ErnieGramPretrainingHeads(
+            self.ernie_gram.config["hidden_size"],
+            self.ernie_gram.config["vocab_size"],
+            self.ernie_gram.config["hidden_act"],
+            embedding_weights=self.ernie_gram.embeddings.word_embeddings.weight,
+            weight_attr=weight_attr, )
+
+        self.apply(self.init_weights)
+
+    def forward(self,
+                input_ids,
+                token_type_ids=None,
+                position_ids=None,
+                attention_mask=None,
+                masked_positions=None):
+        r"""
+        Args:
+            input_ids (Tensor):
+                Indices of input sequence tokens in the vocabulary. They are
+                numerical representations of tokens that build the input sequence.
+                It's data type should be `int64` and has a shape of [batch_size, sequence_length].
+            token_type_ids (Tensor, optional):
+                Segment token indices to indicate first and second portions of the inputs.
+                Indices can be either 0 or 1:
+
+                - 0 corresponds to a **sentence A** token,
+                - 1 corresponds to a **sentence B** token.
+
+                It's data type should be `int64` and has a shape of [batch_size, sequence_length].
+                Defaults to None, which means no segment embeddings is added to token embeddings.
+            position_ids (Tensor, optional):
+                Indices of positions of each input sequence tokens in the position embeddings. Selected in the range ``[0,
+                config.max_position_embeddings - 1]``.
+                Defaults to `None`. Shape as `(batch_sie, num_tokens)` and dtype as `int32` or `int64`.
+            attention_mask (Tensor, optional):
+                Mask to indicate whether to perform attention on each input token or not.
+                The values should be either 0 or 1. The attention scores will be set
+                to **-infinity** for any positions in the mask that are **0**, and will be
+                **unchanged** for positions that are **1**.
+
+                - **1** for tokens that are **not masked**,
+                - **0** for tokens that are **masked**.
+
+                It's data type should be `float32` and has a shape of [batch_size, sequence_length].
+                Defaults to `None`.
+
+
+        Returns:
+            A tuple of shape (``prediction_scores``, ``seq_relationship_score``).
+
+            With the fields:
+            - prediction_scores(Tensor): The scores of prediction on masked token.
+            - seq_relationship_score(Tensor): The scores of next sentence prediction.
+
+        Example:
+            .. code-block::
+
+                import paddle
+                from paddlenlp.transformers import ErnieForTokenClassification, ErnieTokenizer
+
+                tokenizer = ErnieTokenizer.from_pretrained('ernie-1.0')
+                model = ErnieForTokenClassification.from_pretrained('ernie-1.0')
+
+                inputs = tokenizer("这是个测试样例")
+                inputs = {k:paddle.to_tensor([v]) for (k, v) in inputs.items()}
+                logits = model(**inputs)
+
+        """
+        with paddle.static.amp.fp16_guard():
+            outputs = self.ernie_gram(
+                input_ids,
+                token_type_ids=token_type_ids,
+                position_ids=position_ids,
+                attention_mask=attention_mask)
+            sequence_output, pooled_output = outputs[:2]
+            prediction_scores = self.cls(
+                sequence_output, pooled_output, masked_positions)
+            return prediction_scores
+#             prediction_scores, seq_relationship_score = self.cls(
+#                 sequence_output, pooled_output, masked_positions)
+#             return prediction_scores, seq_relationship_score

@@ -90,24 +90,24 @@ def train(args):
             start_lr=0,
             end_lr=args.learning_rate)
     
-#     optimizer = paddle.optimizer.AdamW(
-#         learning_rate=lr_scheduler,
-#         parameters=model.parameters(),
-#         epsilon=args.adam_epsilon,
-#         weight_decay=args.weight_decay)
-    
-    decay_params = [
-        p.name for n, p in model.named_parameters()
-        if not any(nd in n for nd in ["bias", "norm"])
-    ]
     optimizer = paddle.optimizer.AdamW(
         learning_rate=lr_scheduler,
-        beta1=0.9,
-        beta2=0.999,
-        epsilon=args.adam_epsilon,
         parameters=model.parameters(),
-        weight_decay=args.weight_decay,
-        apply_decay_param_fun=lambda x: x in decay_params)    
+        epsilon=args.adam_epsilon,
+        weight_decay=args.weight_decay)
+    
+#     decay_params = [
+#         p.name for n, p in model.named_parameters()
+#         if not any(nd in n for nd in ["bias", "norm"])
+#     ]
+#     optimizer = paddle.optimizer.AdamW(
+#         learning_rate=lr_scheduler,
+#         beta1=0.9,
+#         beta2=0.999,
+#         epsilon=args.adam_epsilon,
+#         parameters=model.parameters(),
+#         weight_decay=args.weight_decay,
+#         apply_decay_param_fun=lambda x: x in decay_params)    
 
     # Train!
     logger.info("***** Running training *****")
@@ -124,6 +124,7 @@ def train(args):
 
     global_step = 0
     epoch_num = 0
+    best_info = {}
     tr_loss, logging_loss = 0.0, 0.0
     model.clear_gradients()
     train_iterator = trange(
@@ -187,6 +188,10 @@ def train(args):
                             mode="test", )
                         logger.info("gstep_epoch:{} {} results: {}".format(
                             global_step, epoch_num, results))
+                        if 'result' not in best_info or best_info['result'][2]['f1'] < results['f1']:
+                            best_info['result'] = [global_step, epoch_num, results]
+                        best_global_step, best_epoch_num, best_results = best_info['result']
+                        logger.info("best_info: gstep_epoch:{} {} results: {}".format(best_global_step, best_epoch_num, best_results))
                     logging_loss = tr_loss
 
                 if (args.local_rank in [-1, 0] and args.save_steps > 0 and

@@ -44,8 +44,7 @@ class BertEmbeddings(Layer):
                  max_position_embeddings=512,
                  type_vocab_size=16):
         super(BertEmbeddings, self).__init__()
-        self.word_embeddings = nn.Embedding(
-            vocab_size, hidden_size, padding_idx=0)
+        self.word_embeddings = nn.Embedding(vocab_size, hidden_size)
         self.position_embeddings = nn.Embedding(max_position_embeddings,
                                                 hidden_size)
         self.token_type_embeddings = nn.Embedding(type_vocab_size, hidden_size)
