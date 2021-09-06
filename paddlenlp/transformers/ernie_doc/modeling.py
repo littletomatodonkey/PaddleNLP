@@ -794,8 +794,8 @@ class ErnieDocForTokenClassification(ErnieDocPretrainedModel):
                                 num_classes)
         self.apply(self.init_weights)
 
-    def forward(self, input_ids, memories, token_type_ids, position_ids,
-                attn_mask):
+    def forward(self, input_ids, memories, token_type_ids=None, position_ids=None,
+                attn_mask=None):
         r"""
         The ErnieDocForTokenClassification forward method, overrides the `__call__()` special method.
 

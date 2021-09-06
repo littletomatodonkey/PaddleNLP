@@ -388,7 +388,6 @@ template void init_logits_mask_Launcher(half* logits_mask,
 
 template void apply_penalties_Launcher(int step,
                                        float* log_probs,
-                                       const bool* finished,
                                        int* current_ids,
                                        int* previous_ids,
                                        int* parent_ids,

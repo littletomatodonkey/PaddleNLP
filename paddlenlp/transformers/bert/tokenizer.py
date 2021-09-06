@@ -69,13 +69,13 @@ class BasicTokenizer(object):
         text = self._tokenize_chinese_chars(text)
 
         orig_tokens = whitespace_tokenize(text)
+
         split_tokens = []
         for token in orig_tokens:
             if self.do_lower_case:
                 token = token.lower()
                 token = self._run_strip_accents(token)
             split_tokens.extend(self._run_split_on_punc(token))
-
         output_tokens = whitespace_tokenize(" ".join(split_tokens))
         return output_tokens
 
@@ -227,7 +227,6 @@ class WordpieceTokenizer(object):
             if len(chars) > self.max_input_chars_per_word:
                 output_tokens.append(self.unk_token)
                 continue
-
             is_bad = False
             start = 0
             sub_tokens = []

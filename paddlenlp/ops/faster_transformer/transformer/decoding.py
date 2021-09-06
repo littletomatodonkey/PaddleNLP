@@ -275,8 +275,7 @@ def transfer_param(p, is_bias=False, restore_data=False, reserve_var=False):
         else:
             param_data = np.array(paddle.static.global_scope().find_var(p.name)
                                   .get_tensor())
-    if not reserve_var:
-        del p
+    del p
     return paddle.create_parameter(
         shape=param_shape,
         dtype="float16",
@@ -475,7 +474,7 @@ class InferTransformerDecoding(nn.Layer):
             self._n_head,
             int(self._d_model / self._n_head), self._num_decoder_layers,
             self._bos_id, self._eos_id, self._max_out_len,
-            self._beam_search_diversity_rate, self._rel_len, self._alpha)
+            self._beam_search_diversity_rate)
 
         ids = finalize(
             self._beam_size,

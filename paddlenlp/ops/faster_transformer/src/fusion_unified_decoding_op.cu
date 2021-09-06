@@ -117,7 +117,6 @@ std::vector<paddle::Tensor> unified_decoding_kernel(
   fastertransformer::Allocator<AllocatorType::PD> allocator_(stream);
 
   decoding_params.memory_sequence_length = memory_sequence_length.data<int>();
-  decoding_params.type_id = type_id.data<int>();
 
   TransformerDecoderInitParam<DataType_>* params =
       new TransformerDecoderInitParam<DataType_>[num_layer_];

@@ -20,27 +20,55 @@ from seqeval.metrics import (
 
 # relative reference
 from utils import parse_args
-from funsd import FunsdDataset
-# from paddlenlp.transformers import LayoutLMModel, LayoutLMForTokenClassification, LayoutLMTokenizer
+# from data_pretrain import DatasetForPretrain
+from data_pretrain import DatasetForPretrainH5py
+from paddlenlp.transformers import ErnieGramForPretraining, ErnieGramTokenizer
+import paddle.distributed as dist
+from paddlenlp.data import Stack
 
-from paddlenlp.transformers import BertForTokenClassification, BertTokenizer
-from paddlenlp.transformers import LinearDecayWithWarmup
-
-def get_labels(path):
-    with open(path, "r") as f:
-        labels = f.read().splitlines()
-    if "O" not in labels:
-        labels = ["O"] + labels
-    return labels
-
+MODEL_CLASSES = {
+    "erniegram":(ErnieGramForPretraining, ErnieGramTokenizer),
+}
 
 def set_seed(args):
     random.seed(args.seed)
     np.random.seed(args.seed)
     paddle.seed(args.seed)
 
+def _collate_data(data, stack_fn=Stack()):
+    num_fields = len(data[0])
+    out = [None] * num_fields
+    # input_ids, input_mask, masked_lm_positions, masked_lm_ids, boxes
+    for i in (0, 1, 4):
+        out[i] = stack_fn([x[i] for x in data])
+
+    batch_size, seq_length = out[0].shape
+    size = sum(len(x[2]) for x in data)
+#     # Padding for divisibility by 8 for fp16 or int8 usage
+#     if size % 8 != 0:
+#         size += 8 - (size % 8)
+    # masked_lm_positions
+    # Organize as a 1D tensor for gather or use gather_nd
+    out[2] = np.full(size, 0, dtype=np.int32)
+    # masked_lm_labels
+    out[3] = np.full([size, 1], -1, dtype=np.int64)
+    mask_token_num = 0
+    for i, x in enumerate(data):
+        for j, pos in enumerate(x[2]):
+            out[2][mask_token_num] = i * seq_length + pos
+            out[3][mask_token_num] = x[3][j]
+            mask_token_num += 1
+    # mask_token_num
+#     out.append(np.asarray([mask_token_num], dtype=np.float32))
+    return out
 
 def train(args):
+    device = 'gpu:{}'.format(dist.ParallelEnv().dev_id)
+    device = paddle.set_device(device)
+    distributed = dist.get_world_size() != 1
+    if distributed:
+        dist.init_parallel_env()
+    
     logging.basicConfig(
         filename=os.path.join(args.output_dir, "train.log")
         if paddle.distributed.get_rank() == 0 else None,
@@ -49,29 +77,34 @@ def train(args):
         level=logging.INFO
         if paddle.distributed.get_rank() == 0 else logging.WARN, )
 
-    labels = get_labels(args.labels)
     pad_token_label_id = paddle.nn.CrossEntropyLoss().ignore_index
-
-    tokenizer = BertTokenizer.from_pretrained(args.model_name_or_path)
+    
+    model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
+        
+    tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path)
 
     # for training process, model is needed for the bert class
     # else it can directly loaded for the downstream task
-    model = BertForTokenClassification.from_pretrained(args.model_name_or_path, num_classes=len(labels))
+    model = model_class.from_pretrained(args.model_name_or_path)
+    if distributed:
+        model = paddle.DataParallel(model)
     loss_fct = paddle.nn.loss.CrossEntropyLoss()
     
-    train_dataset = FunsdDataset(
-        args, tokenizer, labels, pad_token_label_id, mode="train")
+#     train_dataset = DatasetForPretrain(
+#         args, tokenizer, pad_token_label_id, mode="train")
+    train_dataset = DatasetForPretrainH5py(args)
 
     train_sampler = paddle.io.DistributedBatchSampler(
         train_dataset, batch_size=args.per_gpu_train_batch_size, shuffle=True)
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(
         1, paddle.distributed.get_world_size())
-
+    
     train_dataloader = paddle.io.DataLoader(
         train_dataset,
         batch_sampler=train_sampler,
-        collate_fn=None, )
+        collate_fn=_collate_data)
+        
 
     t_total = len(train_dataloader
                   ) // args.gradient_accumulation_steps * args.num_train_epochs
@@ -144,7 +177,8 @@ def train(args):
             model.train()
             inputs = {
                 "input_ids": batch[0],
-                "attention_mask": batch[1]
+                "attention_mask": batch[1],
+                "masked_positions": batch[2]
             }
 #             inputs = {
 #                 "input_ids": batch[0],
@@ -153,16 +187,19 @@ def train(args):
 #             }
 #             if args.model_type in ["layoutlm"]:
 #                 inputs["bbox"] = batch[4]
-            inputs["token_type_ids"] = (
-                batch[2] if args.model_type in ["bert", "layoutlm"] else
-                None)  # RoBERTa don"t use segment_ids
+#             inputs["token_type_ids"] = (
+#                 batch[2] if args.model_type in ["bert", "layoutlm"] else
+#                 None)  # RoBERTa don"t use segment_ids
             outputs = model(**inputs)
-
             loss = loss_fct(outputs, batch[3])
             loss = loss.mean()
-
-            logger.info("gstep_epoch:{} {} train loss: {}".format(
-                global_step, epoch_num, loss.numpy()))
+            
+            if (paddle.distributed.get_rank() == 0 and
+                    args.logging_steps > 0 and
+                    global_step % args.logging_steps == 0):
+                logger.info("gstep_epoch:{} {} train loss: {}".format(
+                    global_step, epoch_num, loss.numpy()))
+                
             loss.backward()
 
             tr_loss += loss.item()
@@ -172,27 +209,27 @@ def train(args):
                 model.clear_gradients()
                 global_step += 1
 
-                if (paddle.distributed.get_rank() == 0 and
-                        args.logging_steps > 0 and
-                        global_step % args.logging_steps == 0):
-                    # Log metrics
-                    if (paddle.distributed.get_rank() == 0 and args.
-                            evaluate_during_training):  # Only evaluate when single GPU otherwise metrics may not average well
-                        results, _ = evaluate(
-                            args,
-                            model,
-                            tokenizer,
-                            loss_fct,
-                            labels,
-                            pad_token_label_id,
-                            mode="test", )
-                        logger.info("gstep_epoch:{} {} results: {}".format(
-                            global_step, epoch_num, results))
-                        if 'result' not in best_info or best_info['result'][2]['f1'] < results['f1']:
-                            best_info['result'] = [global_step, epoch_num, results]
-                        best_global_step, best_epoch_num, best_results = best_info['result']
-                        logger.info("best_info: gstep_epoch:{} {} results: {}".format(best_global_step, best_epoch_num, best_results))
-                    logging_loss = tr_loss
+#                 if (paddle.distributed.get_rank() == 0 and
+#                         args.logging_steps > 0 and
+#                         global_step % args.logging_steps == 0):
+#                     # Log metrics
+#                     if (paddle.distributed.get_rank() == 0 and args.
+#                             evaluate_during_training):  # Only evaluate when single GPU otherwise metrics may not average well
+#                         results, _ = evaluate(
+#                             args,
+#                             model,
+#                             tokenizer,
+#                             loss_fct,
+#                             labels,
+#                             pad_token_label_id,
+#                             mode="test", )
+#                         logger.info("gstep_epoch:{} {} results: {}".format(
+#                             global_step, epoch_num, results))
+#                         if 'result' not in best_info or best_info['result'][2]['f1_seg'] < results['f1_seg']:
+#                             best_info['result'] = [global_step, epoch_num, results]
+#                         best_global_step, best_epoch_num, best_results = best_info['result']
+#                         logger.info("best_info: gstep_epoch:{} {} results: {}".format(best_global_step, best_epoch_num, best_results))
+#                     logging_loss = tr_loss
 
                 if (args.local_rank in [-1, 0] and args.save_steps > 0 and
                         global_step % args.save_steps == 0):
@@ -201,7 +238,10 @@ def train(args):
                         args.output_dir, "checkpoint-{}".format(global_step))
                     os.makedirs(output_dir, exist_ok=True)
                     if paddle.distributed.get_rank() == 0:
-                        model.save_pretrained(output_dir)
+                        if distributed:
+                            model._layers.save_pretrained(output_dir)
+                        else:
+                            model.save_pretrained(output_dir)
                         tokenizer.save_pretrained(output_dir)
                         paddle.save(
                             args, os.path.join(output_dir, "training_args.bin"))
@@ -243,6 +283,7 @@ def evaluate(args,
     nb_eval_steps = 0
     preds = None
     out_label_ids = None
+    image_seg_ids_all = None
     model.eval()
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
         with paddle.no_grad():
@@ -251,6 +292,13 @@ def evaluate(args,
                 "attention_mask": batch[1],
             }
             inputs_labels = batch[3]
+            image_seg_ids = batch[5]
+            image_seg_ids = image_seg_ids.numpy()
+            if image_seg_ids_all is None:
+                image_seg_ids_all = image_seg_ids
+            else:
+                image_seg_ids_all = np.append(image_seg_ids_all, image_seg_ids, axis=0)
+
 #             inputs = {
 #                 "input_ids": batch[0],
 #                 "attention_mask": batch[1],
@@ -258,9 +306,9 @@ def evaluate(args,
 #             }
             if args.model_type in ["layoutlm"]:
                 inputs["bbox"] = batch[4]
-            inputs["token_type_ids"] = (
-                batch[2] if args.model_type in ["bert", "layoutlm"] else
-                None)  # RoBERTa don"t use segment_ids
+#             inputs["token_type_ids"] = (
+#                 batch[2] if args.model_type in ["bert", "layoutlm"] else
+#                 None)  # RoBERTa don"t use segment_ids
             logits = model(**inputs)
             tmp_eval_loss = loss_fct(logits, batch[3])
 #             outputs = model(**inputs)
@@ -280,7 +328,7 @@ def evaluate(args,
 
     eval_loss = eval_loss / nb_eval_steps
     preds = np.argmax(preds, axis=2)
-    
+
     label_map = {i: label for i, label in enumerate(labels)}
 
     out_label_list = [[] for _ in range(out_label_ids.shape[0])]
@@ -288,15 +336,60 @@ def evaluate(args,
 
     for i in range(out_label_ids.shape[0]):
         for j in range(out_label_ids.shape[1]):
-            if out_label_ids[i, j] != pad_token_label_id:
+            if out_label_ids[i][j] != pad_token_label_id:
                 out_label_list[i].append(label_map[out_label_ids[i][j]])
                 preds_list[i].append(label_map[preds[i][j]])
+    
+    ###get segments results
+    image_seg_ids_map = {}
+    for i in range(image_seg_ids_all.shape[0]):
+        for j in range(0, image_seg_ids_all.shape[1], 2):
+            img_id = image_seg_ids_all[i][j]
+            seg_id = image_seg_ids_all[i][j+1]
+            if img_id >=0 and seg_id >=0:
+                key = "%d_%d" % (img_id, seg_id)
+                if key not in image_seg_ids_map:
+                    image_seg_ids_map[key] = []
+                image_seg_ids_map[key].append((i, int(j/2)))
+                
+    dt_num = 0
+    gt_num = 0
+    same_num = 0
+    for key in image_seg_ids_map:
+        tmp_labels_dict = {}
+        tmp_preds_dict = {}
+        for (i, j) in image_seg_ids_map[key]:
+            tmp_label = label_map[out_label_ids[i][j]].strip("I-")
+            tmp_pred = label_map[preds[i][j]].strip("I-")
+            tmp_label = tmp_label.strip("B-")
+            tmp_pred = tmp_pred.strip("B-")
+            if tmp_label not in tmp_labels_dict:
+                tmp_labels_dict[tmp_label] = 0
+            if tmp_pred not in tmp_preds_dict:
+                tmp_preds_dict[tmp_pred] = 0
+            tmp_labels_dict[tmp_label] += 1
+            tmp_preds_dict[tmp_pred] += 1
+        max_label = sorted(tmp_labels_dict.items(),
+                           key=lambda e:e[1], reverse=True)[0][0]
+        max_pred = sorted(tmp_preds_dict.items(),
+                           key=lambda e:e[1], reverse=True)[0][0]
+        dt_num += 1
+        gt_num += 1
+        if max_label == max_pred:
+            same_num += 1
+    
+    precision_seg = same_num * 1.0 / dt_num
+    recall_seg = same_num * 1.0 / gt_num
+    f1_seg = 2 * (precision_seg * recall_seg) / (precision_seg + recall_seg)
 
     results = {
         "loss": eval_loss,
         "precision": precision_score(out_label_list, preds_list),
         "recall": recall_score(out_label_list, preds_list),
         "f1": f1_score(out_label_list, preds_list),
+        "precision_seg": precision_seg,
+        "recall_seg": recall_seg,
+        "f1_seg": f1_seg,
     }
 
 #     with open("test_gt.txt", "w") as fout:
@@ -316,7 +409,7 @@ def evaluate(args,
     logger.info("***** Eval results %s *****", prefix)
     for key in sorted(results.keys()):
         logger.info("  %s = %s", key, str(results[key]))
-
+        
     return results, preds_list
 
 

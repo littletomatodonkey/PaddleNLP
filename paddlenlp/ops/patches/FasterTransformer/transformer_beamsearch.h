@@ -417,7 +417,6 @@ public:
                          k,
                          computeType_,
                          static_cast<cublasGemmAlgo_t>(cublasAlgo_[0])));
-
       } else {
         // trans here
         check_cuda_error(
@@ -470,9 +469,6 @@ public:
       check_cuda_error(cudaGetLastError());
 #endif
 
-      float alpha_T = (DataType_)1.0f;
-      float beta_T = (DataType_)0.0f;
-
       check_cuda_error(
           cublasGemmEx(decoding_params.cublas_handle,
                        CUBLAS_OP_N,
@@ -499,8 +495,6 @@ public:
       check_cuda_error(cudaGetLastError());
 #endif
 
-      // Beamsearch
-      update_logits(logits_buf_,
                     decoding_params.embedding_bias,
                     args_.end_id_,
                     finished_buf_,
@@ -584,7 +578,6 @@ public:
           args_.beam_width_,
           args_.hidden_units_,
           step,
-          args_.start_len_,
           cache_size,
           args_.decoder_layers_,
           decoding_params.stream);

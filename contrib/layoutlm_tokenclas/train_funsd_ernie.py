@@ -23,7 +23,7 @@ from utils import parse_args
 from funsd import FunsdDataset
 # from paddlenlp.transformers import LayoutLMModel, LayoutLMForTokenClassification, LayoutLMTokenizer
 
-from paddlenlp.transformers import BertForTokenClassification, BertTokenizer
+from paddlenlp.transformers import ErnieForTokenClassification, ErnieTokenizer
 from paddlenlp.transformers import LinearDecayWithWarmup
 
 def get_labels(path):
@@ -52,11 +52,11 @@ def train(args):
     labels = get_labels(args.labels)
     pad_token_label_id = paddle.nn.CrossEntropyLoss().ignore_index
 
-    tokenizer = BertTokenizer.from_pretrained(args.model_name_or_path)
+    tokenizer = ErnieTokenizer.from_pretrained(args.model_name_or_path)
 
     # for training process, model is needed for the bert class
     # else it can directly loaded for the downstream task
-    model = BertForTokenClassification.from_pretrained(args.model_name_or_path, num_classes=len(labels))
+    model = ErnieForTokenClassification.from_pretrained(args.model_name_or_path, num_classes=len(labels))
     loss_fct = paddle.nn.loss.CrossEntropyLoss()
     
     train_dataset = FunsdDataset(
