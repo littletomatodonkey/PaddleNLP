@@ -338,6 +338,8 @@ def evaluate(args,
     dt_num = 0
     gt_num = 0
     same_num = 0
+    seg_out_label_list = []
+    seg_preds_list = []
     for key in image_seg_ids_map:
         tmp_labels_dict = {}
         tmp_preds_dict = {}
@@ -356,23 +358,25 @@ def evaluate(args,
                            key=lambda e:e[1], reverse=True)[0][0]
         max_pred = sorted(tmp_preds_dict.items(),
                            key=lambda e:e[1], reverse=True)[0][0]
-        dt_num += 1
-        gt_num += 1
-        if max_label == max_pred:
-            same_num += 1
+        seg_out_label_list.append([max_label])
+        seg_preds_list.append([max_pred])
+#         dt_num += 1
+#         gt_num += 1
+#         if max_label == max_pred:
+#             same_num += 1
     
-    precision_seg = same_num * 1.0 / dt_num
-    recall_seg = same_num * 1.0 / gt_num
-    f1_seg = 2 * (precision_seg * recall_seg) / (precision_seg + recall_seg)
+#     precision_seg = same_num * 1.0 / dt_num
+#     recall_seg = same_num * 1.0 / gt_num
+#     f1_seg = 2 * (precision_seg * recall_seg) / (precision_seg + recall_seg)
 
     results = {
         "loss": eval_loss,
         "precision": precision_score(out_label_list, preds_list),
         "recall": recall_score(out_label_list, preds_list),
         "f1": f1_score(out_label_list, preds_list),
-        "precision_seg": precision_seg,
-        "recall_seg": recall_seg,
-        "f1_seg": f1_seg,
+        "precision_seg": precision_score(seg_out_label_list, seg_preds_list),
+        "recall_seg": recall_score(seg_out_label_list, seg_preds_list),
+        "f1_seg": f1_score(seg_out_label_list, seg_preds_list)
     }
 
 #     with open("test_gt.txt", "w") as fout:
@@ -387,6 +391,8 @@ def evaluate(args,
 #             fout.write("\n")
 
     report = classification_report(out_label_list, preds_list)
+    logger.info("\n" + report)
+    report = classification_report(seg_out_label_list, seg_preds_list)
     logger.info("\n" + report)
 
     logger.info("***** Eval results %s *****", prefix)
