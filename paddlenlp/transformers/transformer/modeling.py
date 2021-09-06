@@ -837,6 +837,17 @@ class InferTransformerModel(TransformerModel):
             Specify beam search version. It should be in one
             of [`v1`, `v2`]. If `v2`, need to set `alpha`(default to 0.6) for length
             penalty. Default to `v1`.
+        kwargs:
+            The key word arguments can be `rel_len` and `alpha`:
+
+            - `rel_len(bool, optional)`: Indicating whether `max_out_len` in
+            is the length relative to that of source text. Only works in `v2`
+            temporarily. It is suggest to set a small `max_out_len` and use
+            `rel_len=True`. Default to False if not set.
+
+            - `alpha(float, optional)`: The power number in length penalty
+            calculation. Refer to `GNMT <https://arxiv.org/pdf/1609.08144.pdf>`_.
+            Only works in `v2` temporarily. Default to 0.6 if not set.
     """
 
     def __init__(self,
@@ -1003,6 +1014,7 @@ class InferTransformerModel(TransformerModel):
         def expand_to_beam_size(tensor, beam_size):
             tensor = paddle.reshape(tensor,
                                     [tensor.shape[0], 1] + tensor.shape[1:])
+            tensor = paddle.unsqueeze(tensor, axis=1)
             tile_dims = [1] * len(tensor.shape)
             tile_dims[1] = beam_size
             return paddle.tile(tensor, tile_dims)

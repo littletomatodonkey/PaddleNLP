@@ -57,3 +57,9 @@ from .roformer.modeling import *
 from .roformer.tokenizer import *
 from .unimo.modeling import *
 from .unimo.tokenizer import *
+from .layoutlm.modeling import *
+from .layoutlm.tokenizer import *
+from .layoutlmv2.modeling import *
+from .layoutlmv2.tokenizer import *
+from .layoutxlm.modeling import *
+from .layoutxlm.tokenizer import *

@@ -427,6 +427,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
                              paddle.zeros((1, self.bart.config['vocab_size'])))
         self.apply(self.init_weights)
 
+
     def forward(self,
                 input_ids,
                 attention_mask=None,

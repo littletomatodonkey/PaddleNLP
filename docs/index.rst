@@ -71,8 +71,8 @@
    :maxdepth: 2
    :caption: 社区交流共建
 
+   如何贡献模型 <community/contribute_models/index>
    如何贡献数据集 <community/contribute_datasets/index>
-   如何贡献模型 <community/contribute_models>
    如何贡献文档案例 <community/contribute_docs>
    如何加入兴趣小组 <community/join_in_PaddleNLP-SIG>
 
@@ -84,9 +84,11 @@
    paddlenlp.datasets <source/paddlenlp.datasets>
    paddlenlp.embeddings <source/paddlenlp.embeddings>
    paddlenlp.layers <source/paddlenlp.layers>
+   paddlenlp.losses <source/paddlenlp.losses>
    paddlenlp.metrics <source/paddlenlp.metrics>
    paddlenlp.ops <source/paddlenlp.ops>
    paddlenlp.seq2vec <source/paddlenlp.seq2vec>
+   paddlenlp.taskflow <source/paddlenlp.taskflow>
    paddlenlp.transformers <source/paddlenlp.transformers>
    paddlenlp.utils <source/paddlenlp.utils>
 
