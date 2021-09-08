@@ -138,7 +138,6 @@ def train(args):
             desc="Iteration",
             disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
-            # model.eval()
             model.train()
             inputs = {
                 "input_ids": batch[0],
@@ -277,7 +276,7 @@ def evaluate(args,
     eval_loss = eval_loss / nb_eval_steps
     preds = np.argmax(preds, axis=2)
 
-    label_map = {i: label for i, label in enumerate(labels)}
+    label_map = {i: label.upper() for i, label in enumerate(labels)}
 
     out_label_list = [[] for _ in range(out_label_ids.shape[0])]
     preds_list = [[] for _ in range(out_label_ids.shape[0])]
