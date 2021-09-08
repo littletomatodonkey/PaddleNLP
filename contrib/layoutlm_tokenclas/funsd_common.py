@@ -236,6 +236,8 @@ def convert_examples_to_features(
             label_ids_doc.extend(tokens_label_ids)
             image_seg_ids_doc.extend([ex_index, seg_no] * len(word_tokens))
             seg_no += 1
+#         print(len(tokens_doc))
+#         sys.exit(-1)
 
         # Account for [CLS] and [SEP] with "- 2" and with "- 3" for RoBERTa.
         special_tokens_count = 3 if sep_token_extra else 2
@@ -284,7 +286,7 @@ def convert_examples_to_features(
             # The mask has 1 for real tokens and 0 for padding tokens. Only real
             # tokens are attended to.
             input_mask = [1 if mask_padding_with_zero else 0] * len(input_ids)
-
+    
             # Zero-pad up to the sequence length.
             padding_length = max_seq_length - len(input_ids)
             if pad_on_left:
@@ -316,8 +318,8 @@ def convert_examples_to_features(
                 input_mask = np.reshape(input_mask.astype(np.float32), 
                     [1, 1, input_mask.shape[0]])
 
-            #         input_mask = (1 - np.reshape(input_mask.astype(np.float32), 
-            #             [1, 1, input_mask.shape[0]])) * -1e9
+#             input_mask = (1 - np.reshape(input_mask.astype(np.float32), 
+#                 [1, 1, input_mask.shape[0]])) * -1e9
 
             #         if ex_index < 5:
             #             logger.info("*** Example ***")

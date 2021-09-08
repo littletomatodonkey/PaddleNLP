@@ -48,11 +48,13 @@ export PYTHONPATH=../../:$PYTHONPATH
 #     --per_gpu_train_batch_size 16 \
 #     --per_gpu_eval_batch_size 16 \
 #     --evaluate_during_training
-    
+
+#    --model_name_or_path "ernie-gram-zh" \
+
 python3.7 -m paddle.distributed.launch --gpus '0,1,2,3' train_pretrain_model.py \
     --data_dir "./data/yanbao_v1/yanbao_v1_train.h5" \
     --model_type "erniegram" \
-    --model_name_or_path "ernie-gram-zh" \
+    --model_name_or_path "./erniegram-yanbao-5000/" \
     --do_lower_case \
     --max_seq_length 512 \
     --do_train \
