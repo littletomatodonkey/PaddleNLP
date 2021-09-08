@@ -839,7 +839,6 @@ class LayoutLMv2ForTokenClassification(LayoutLMv2PretrainedModel):
                                   self.layoutlmv2.config["hidden_dropout_prob"])
         self.classifier = nn.Linear(self.layoutlmv2.config["hidden_size"],
                                     num_classes)
-        self.dropout.apply(self.init_weights)
         self.classifier.apply(self.init_weights)
 
     def get_input_embeddings(self):
