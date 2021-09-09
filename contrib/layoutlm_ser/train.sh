@@ -1,19 +1,22 @@
-export CUDA_VISIBLE_DEVICES=0
+# export CUDA_VISIBLE_DEVICES=0,1,2,3
+export CUDA_VISIBLE_DEVICES=1
 
 export PYTHONPATH=../../:$PYTHONPATH
 
-python3.7 train.py \
+python3.7 -m paddle.distributed.launch \
+    --gpus="1" \
+    train.py \
     --model_type "layoutxlm" \
     --model_name_or_path "./layoutxlm-base-paddle/" \
-    --do_lower_case \
     --max_seq_length 512 \
-    --do_train \
-    --do_eval \
+    --train_data_dir "zh.train/" \
+    --train_label_path "zh.train/xfun_normalize_train.json" \
+    --eval_data_dir "zh.val/" \
+    --eval_label_path "zh.val/xfun_normalize_val.json" \
     --num_train_epochs 200 \
-    --logging_steps 50 \
+    --eval_steps 10 \
     --save_steps 500 \
-    --output_dir "output_v8_paddle_data/" \
-    --labels "./SROIE/anno/labels.txt" \
+    --output_dir "output_v9_debug/" \
     --learning_rate 5e-5 \
     --warmup_steps 50 \
     --per_gpu_train_batch_size 8 \
