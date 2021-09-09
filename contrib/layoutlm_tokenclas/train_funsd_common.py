@@ -94,7 +94,7 @@ def train(args):
     train_dataloader = paddle.io.DataLoader(
         train_dataset,
         batch_sampler=train_sampler,
-        collate_fn=None, )
+        collate_fn=None)
 
     t_total = len(train_dataloader
                   ) // args.gradient_accumulation_steps * args.num_train_epochs
@@ -113,24 +113,24 @@ def train(args):
             start_lr=0,
             end_lr=args.learning_rate)
     
-    optimizer = paddle.optimizer.AdamW(
-        learning_rate=lr_scheduler,
-        parameters=model.parameters(),
-        epsilon=args.adam_epsilon,
-        weight_decay=args.weight_decay)
-    
-#     decay_params = [
-#         p.name for n, p in model.named_parameters()
-#         if not any(nd in n for nd in ["bias", "norm"])
-#     ]
 #     optimizer = paddle.optimizer.AdamW(
 #         learning_rate=lr_scheduler,
-#         beta1=0.9,
-#         beta2=0.999,
-#         epsilon=args.adam_epsilon,
 #         parameters=model.parameters(),
-#         weight_decay=args.weight_decay,
-#         apply_decay_param_fun=lambda x: x in decay_params)    
+#         epsilon=args.adam_epsilon,
+#         weight_decay=args.weight_decay)
+    
+    decay_params = [
+        p.name for n, p in model.named_parameters()
+        if not any(nd in n for nd in ["bias", "norm"])
+    ]
+    optimizer = paddle.optimizer.AdamW(
+        learning_rate=lr_scheduler,
+        beta1=0.9,
+        beta2=0.999,
+        epsilon=args.adam_epsilon,
+        parameters=model.parameters(),
+        weight_decay=args.weight_decay,
+        apply_decay_param_fun=lambda x: x in decay_params)    
 
     # Train!
     logger.info("***** Running training *****")
@@ -211,7 +211,7 @@ def train(args):
                             mode="test", )
                         logger.info("gstep_epoch:{} {} results: {}".format(
                             global_step, epoch_num, results))
-                        if 'result' not in best_info or best_info['result'][2]['f1_seg'] < results['f1_seg']:
+                        if 'result' not in best_info or best_info['result'][2]['f1'] < results['f1']:
                             best_info['result'] = [global_step, epoch_num, results]
                         best_global_step, best_epoch_num, best_results = best_info['result']
                         logger.info("best_info: gstep_epoch:{} {} results: {}".format(best_global_step, best_epoch_num, best_results))
@@ -322,7 +322,7 @@ def evaluate(args,
             if out_label_ids[i][j] != pad_token_label_id:
                 out_label_list[i].append(label_map[out_label_ids[i][j]])
                 preds_list[i].append(label_map[preds[i][j]])
-    
+
     ###get segments results
     image_seg_ids_map = {}
     for i in range(image_seg_ids_all.shape[0]):
@@ -358,42 +358,53 @@ def evaluate(args,
                            key=lambda e:e[1], reverse=True)[0][0]
         max_pred = sorted(tmp_preds_dict.items(),
                            key=lambda e:e[1], reverse=True)[0][0]
-        seg_out_label_list.append([max_label])
-        seg_preds_list.append([max_pred])
-#         dt_num += 1
-#         gt_num += 1
-#         if max_label == max_pred:
-#             same_num += 1
+#         seg_out_label_list.append([max_label])
+#         seg_preds_list.append([max_pred])
+        if max_label == "O":
+            continue
+        dt_num += 1
+        gt_num += 1
+        if max_label == max_pred:
+            same_num += 1
     
-#     precision_seg = same_num * 1.0 / dt_num
-#     recall_seg = same_num * 1.0 / gt_num
-#     f1_seg = 2 * (precision_seg * recall_seg) / (precision_seg + recall_seg)
+    precision_seg = same_num * 1.0 / dt_num
+    recall_seg = same_num * 1.0 / gt_num
+    f1_seg = 2 * (precision_seg * recall_seg) / (precision_seg + recall_seg)
 
+#     results = {
+#         "loss": eval_loss,
+#         "precision": precision_score(out_label_list, preds_list),
+#         "recall": recall_score(out_label_list, preds_list),
+#         "f1": f1_score(out_label_list, preds_list),
+#         "precision_seg": precision_score(seg_out_label_list, seg_preds_list),
+#         "recall_seg": recall_score(seg_out_label_list, seg_preds_list),
+#         "f1_seg": f1_score(seg_out_label_list, seg_preds_list)
+#     }
     results = {
         "loss": eval_loss,
         "precision": precision_score(out_label_list, preds_list),
         "recall": recall_score(out_label_list, preds_list),
         "f1": f1_score(out_label_list, preds_list),
-        "precision_seg": precision_score(seg_out_label_list, seg_preds_list),
-        "recall_seg": recall_score(seg_out_label_list, seg_preds_list),
-        "f1_seg": f1_score(seg_out_label_list, seg_preds_list)
+        "precision_seg": precision_seg,
+        "recall_seg": recall_seg,
+        "f1_seg": f1_seg
     }
 
-#     with open("test_gt.txt", "w") as fout:
-#         for lbl in out_label_list:
-#             for l in lbl:
-#                 fout.write(l + "\t")
-#             fout.write("\n")
-#     with open("test_pred.txt", "w") as fout:
-#         for lbl in preds_list:
-#             for l in lbl:
-#                 fout.write(l + "\t")
-#             fout.write("\n")
+    with open("test_gt.txt", "w") as fout:
+        for lbl in out_label_list:
+            for l in lbl:
+                fout.write(l + "\t")
+            fout.write("\n")
+    with open("test_pred.txt", "w") as fout:
+        for lbl in preds_list:
+            for l in lbl:
+                fout.write(l + "\t")
+            fout.write("\n")
 
     report = classification_report(out_label_list, preds_list)
     logger.info("\n" + report)
-    report = classification_report(seg_out_label_list, seg_preds_list)
-    logger.info("\n" + report)
+#     report = classification_report(seg_out_label_list, seg_preds_list)
+#     logger.info("\n" + report)
 
     logger.info("***** Eval results %s *****", prefix)
     for key in sorted(results.keys()):
