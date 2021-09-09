@@ -6,8 +6,53 @@ import logging
 import os
 import random
 import shutil
+import imghdr
 
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
+
+
+def get_image_file_list(img_file):
+    imgs_lists = []
+    if img_file is None or not os.path.exists(img_file):
+        raise Exception("not found any img file in {}".format(img_file))
+
+    img_end = {'jpg', 'bmp', 'png', 'jpeg', 'rgb', 'tif', 'tiff', 'gif', 'GIF'}
+    if os.path.isfile(img_file) and imghdr.what(img_file) in img_end:
+        imgs_lists.append(img_file)
+    elif os.path.isdir(img_file):
+        for single_file in os.listdir(img_file):
+            file_path = os.path.join(img_file, single_file)
+            if os.path.isfile(file_path) and imghdr.what(file_path) in img_end:
+                imgs_lists.append(file_path)
+    if len(imgs_lists) == 0:
+        raise Exception("not found any img file in {}".format(img_file))
+    imgs_lists = sorted(imgs_lists)
+    return imgs_lists
+
+
+def draw_ser_results(image, ocr_results):
+    color_map = {
+        1: (0, 0, 255),  # question
+        2: (0, 255, 0),  # answer
+        3: (255, 0, 0),  # header
+    }
+    if isinstance(image, np.ndarray):
+        image = Image.fromarray(image)
+    img_new = image.copy()
+    draw = ImageDraw.Draw(img_new)
+    for ocr_info in ocr_results:
+        if ocr_info["pred_id"] not in color_map:
+            continue
+        color = color_map[ocr_info["pred_id"]]
+
+        # just for rectangle
+        bbox = ocr_info["bbox"]
+        bbox = ((bbox[0], bbox[1]), (bbox[2], bbox[3]))
+        draw.rectangle(bbox, fill=color)
+
+    img_new = Image.blend(image, img_new, 0.5)
+    return np.array(img_new)
 
 
 def parse_args():
@@ -54,10 +99,17 @@ def parse_args():
         required=False, )
 
     parser.add_argument(
-        "--infer_img",
+        "--infer_imgs",
         default=None,
         type=str,
         required=False, )
+
+    parser.add_argument(
+        "--ocr_json_path",
+        default=None,
+        type=str,
+        required=False,
+        help="ocr prediction results")
 
     parser.add_argument(
         "--use_vdl",
