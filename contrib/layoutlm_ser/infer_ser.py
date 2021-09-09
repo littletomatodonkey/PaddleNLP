@@ -51,7 +51,10 @@ def pad_sentences(tokenizer,
                   return_token_type_ids=True,
                   return_overflowing_tokens=False,
                   return_special_tokens_mask=False):
-    # Padding
+    # Padding with larger size, reshape is carried out
+    max_seq_len = (
+        len(encoded_inputs["input_ids"]) // max_seq_len + 1) * max_seq_len
+
     needs_to_be_padded = pad_to_max_seq_len and \
                          max_seq_len and len(encoded_inputs["input_ids"]) < max_seq_len
 
@@ -81,9 +84,26 @@ def pad_sentences(tokenizer,
 
 
 def truncate_inputs(encoded_inputs, max_seq_len=512):
+    """
+    truncate is often used in training process
+    """
     for key in encoded_inputs:
         length = min(len(encoded_inputs[key]), max_seq_len)
         encoded_inputs[key] = encoded_inputs[key][:length]
+    return encoded_inputs
+
+
+def split_page(encoded_inputs, max_seq_len=512):
+    """
+    truncate is often used in training process
+    """
+    for key in encoded_inputs:
+        encoded_inputs[key] = paddle.to_tensor(encoded_inputs[key])
+        if encoded_inputs[key].ndim <= 1:  # for input_ids, att_mask and so on
+            encoded_inputs[key] = encoded_inputs[key].reshape([-1, max_seq_len])
+        else:  # for bbox
+            encoded_inputs[key] = encoded_inputs[key].reshape(
+                [-1, max_seq_len, 4])
     return encoded_inputs
 
 
@@ -93,13 +113,15 @@ def preprocess(
         ocr_info,
         img_size=(224, 224),
         pad_token_label_id=-100,
+        max_seq_len=512,
         add_special_ids=False,
         return_attention_mask=True, ):
     ocr_info = deepcopy(ocr_info)
     height = ori_img.shape[0]
     width = ori_img.shape[1]
 
-    img = cv2.resize(ori_img, (224, 224)).transpose([2, 0, 1])
+    img = cv2.resize(ori_img,
+                     (224, 224)).transpose([2, 0, 1]).astype(np.float32)
 
     segment_offset_id = []
     words_list = []
@@ -139,15 +161,19 @@ def preprocess(
     }
 
     encoded_inputs = pad_sentences(
-        tokenizer, encoded_inputs, return_attention_mask=return_attention_mask)
-    encoded_inputs = truncate_inputs(encoded_inputs)
+        tokenizer,
+        encoded_inputs,
+        max_seq_len=max_seq_len,
+        return_attention_mask=return_attention_mask)
 
-    encoded_inputs["image"] = img
+    # encoded_inputs = truncate_inputs(encoded_inputs)
 
-    encoded_inputs = {
-        key: paddle.to_tensor(encoded_inputs[key]).unsqueeze(0)
-        for key in encoded_inputs
-    }
+    encoded_inputs = split_page(encoded_inputs)
+
+    fake_bs = encoded_inputs["input_ids"].shape[0]
+
+    encoded_inputs["image"] = paddle.to_tensor(img).unsqueeze(0).expand(
+        [fake_bs] + list(img.shape))
 
     encoded_inputs["segment_offset_id"] = segment_offset_id
 
@@ -190,10 +216,7 @@ def merge_preds_list_with_ocr_info(ocr_info, segment_offset_id, preds_list):
         curr_pred = preds[start_id:end_id]
         curr_pred = [label_to_id_map[p] for p in curr_pred]
 
-        print("curr_pred: ", curr_pred)
-
         if len(curr_pred) <= 0:
-            print("prediction empty!!!!")
             pred_id = 0
         else:
             counts = np.bincount(curr_pred)
@@ -231,7 +254,11 @@ def infer(args):
         img = cv2.imread(img_path)
 
         ocr_info = ocr_results[os.path.basename(img_path)]["ocr_info"]
-        inputs = preprocess(tokenizer=tokenizer, ori_img=img, ocr_info=ocr_info)
+        inputs = preprocess(
+            tokenizer=tokenizer,
+            ori_img=img,
+            ocr_info=ocr_info,
+            max_seq_len=args.max_seq_length)
 
         outputs = model(
             input_ids=inputs["input_ids"],
