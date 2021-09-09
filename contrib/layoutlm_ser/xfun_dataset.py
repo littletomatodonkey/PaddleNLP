@@ -370,7 +370,7 @@ class XfunDatasetInfer(XfunDatasetForSer):
         # read text info
         info_dict = json.loads(info_str)
         height = info_dict["height"]
-        width = info_dict["height"]
+        width = info_dict["width"]
 
         words_list = []
         bbox_list = []

@@ -16,7 +16,7 @@ python3.7 -m paddle.distributed.launch \
     --num_train_epochs 200 \
     --eval_steps 10 \
     --save_steps 500 \
-    --output_dir "output_v9_debug/" \
+    --output_dir "output_v9/" \
     --learning_rate 5e-5 \
     --warmup_steps 50 \
     --per_gpu_train_batch_size 8 \
