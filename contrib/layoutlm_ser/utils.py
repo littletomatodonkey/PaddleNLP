@@ -69,6 +69,14 @@ def parse_args():
         type=str,
         required=True, )
     parser.add_argument(
+        "--ocr_rec_model_dir",
+        default="./ch_ppocr_mobile_v2.1_rec_infer",
+        type=str, )
+    parser.add_argument(
+        "--ocr_det_model_dir",
+        default="./ch_ppocr_mobile_v2.1_det_infer",
+        type=str, )
+    parser.add_argument(
         "--weights_path",
         default=None,
         type=str,
