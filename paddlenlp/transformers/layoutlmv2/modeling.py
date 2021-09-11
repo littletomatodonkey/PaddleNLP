@@ -173,6 +173,7 @@ class LayoutLMv2Embeddings(Layer):
         return embeddings
 
 
+@register_base_model
 class LayoutLMv2PretrainedModel(PretrainedModel):
     model_config_file = "model_config.json"
     pretrained_init_configuration = {
@@ -828,11 +829,17 @@ class LayoutLMv2Model(LayoutLMv2PretrainedModel):
         return sequence_output, pooled_output
 
 
+@register_base_model
 class LayoutLMv2ForTokenClassification(LayoutLMv2PretrainedModel):
     def __init__(self, layoutlm, num_classes=2, dropout=None):
         super().__init__()
         self.num_classes = num_classes
-        self.layoutlmv2 = layoutlm
+        if isinstance(layoutlm, dict):
+            self.layoutlmv2 = LayoutLMv2Model(**layoutlm)
+        else:
+            self.layoutlmv2 = layoutlm
+        # print(self.layoutlmv2)
+        # exit()
 
         self.dropout = nn.Dropout(dropout if dropout is not None else
                                   self.layoutlmv2.config["hidden_dropout_prob"])
