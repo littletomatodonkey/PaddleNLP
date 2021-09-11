@@ -14,7 +14,7 @@ from paddleocr import PaddleOCR, draw_ocr
 from PIL import Image
 
 # relative reference
-from utils import parse_args, get_image_file_list, draw_ser_results
+from utils import parse_args, get_image_file_list, draw_ser_results, get_label_maps
 from paddlenlp.transformers import LayoutXLMModel, LayoutXLMTokenizer, LayoutXLMForTokenClassification
 
 
@@ -25,20 +25,6 @@ def build_ocr_engine(rec_model_dir, det_model_dir):
         cls_model_dir=rec_model_dir,
         use_angle_cls=False)
     return ocr_engine
-
-
-# label to draw id
-def get_label_to_id_map():
-    label_to_id_map = {
-        "O": 0,
-        "B-QUESTION": 1,
-        "I-QUESTION": 1,
-        "B-ANSWER": 2,
-        "I-ANSWER": 2,
-        "B-HEADER": 3,
-        "I-HEADER": 3,
-    }
-    return label_to_id_map
 
 
 def get_labels():
@@ -192,14 +178,10 @@ def preprocess(
     return encoded_inputs
 
 
-def postprocess(attention_mask, preds):
+def postprocess(attention_mask, preds, id2label_map):
     if isinstance(preds, paddle.Tensor):
         preds = preds.numpy()
     preds = np.argmax(preds, axis=2)
-
-    labels = get_labels()
-
-    label_map = {i: label.upper() for i, label in enumerate(labels)}
 
     preds_list = [[] for _ in range(preds.shape[0])]
 
@@ -207,15 +189,15 @@ def postprocess(attention_mask, preds):
     for i in range(preds.shape[0]):
         for j in range(preds.shape[1]):
             if attention_mask[i][j] == 1:
-                preds_list[i].append(label_map[preds[i][j]])
+                preds_list[i].append(id2label_map[preds[i][j]])
 
     return preds_list
 
 
-def merge_preds_list_with_ocr_info(ocr_info, segment_offset_id, preds_list):
+def merge_preds_list_with_ocr_info(ocr_info, segment_offset_id, preds_list,
+                                   label2id_map_for_draw):
     # must ensure the preds_list is generated from the same image
     preds = [p for pred in preds_list for p in pred]
-    label_to_id_map = get_label_to_id_map()
 
     for idx in range(len(segment_offset_id)):
         if idx == 0:
@@ -226,7 +208,7 @@ def merge_preds_list_with_ocr_info(ocr_info, segment_offset_id, preds_list):
         end_id = segment_offset_id[idx]
 
         curr_pred = preds[start_id:end_id]
-        curr_pred = [label_to_id_map[p] for p in curr_pred]
+        curr_pred = [label2id_map_for_draw[p] for p in curr_pred]
 
         if len(curr_pred) <= 0:
             pred_id = 0
@@ -277,6 +259,14 @@ def infer(args):
         args.model_name_or_path)
     model.eval()
 
+    label2id_map, id2label_map = get_label_maps(args.label_map_path)
+    label2id_map_for_draw = dict()
+    for key in label2id_map:
+        if key.startswith("I-"):
+            label2id_map_for_draw[key] = label2id_map["B" + key[1:]]
+        else:
+            label2id_map_for_draw[key] = label2id_map[key]
+
     # load ocr results json
     ocr_results = dict()
     with open(args.ocr_json_path, "r") as fin:
@@ -321,9 +311,9 @@ def infer(args):
             attention_mask=inputs["attention_mask"])
 
         preds = outputs[0]
-        preds = postprocess(inputs["attention_mask"], preds)
+        preds = postprocess(inputs["attention_mask"], preds, id2label_map)
         ocr_info = merge_preds_list_with_ocr_info(
-            ocr_info, inputs["segment_offset_id"], preds)
+            ocr_info, inputs["segment_offset_id"], preds, label2id_map_for_draw)
 
         img_res = draw_ser_results(img, ocr_info)
         cv2.imwrite(

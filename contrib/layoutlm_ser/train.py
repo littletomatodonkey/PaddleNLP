@@ -6,7 +6,7 @@ import paddle
 
 import numpy as np
 import random
-
+import copy
 import logging
 logger = logging.getLogger(__name__)
 
@@ -17,23 +17,10 @@ from seqeval.metrics import (
     recall_score, )
 
 # relative reference
-from utils import parse_args
+from utils import parse_args, get_label_maps
 from paddlenlp.transformers import LayoutXLMModel, LayoutXLMTokenizer, LayoutXLMForTokenClassification
 
 from xfun_dataset import XfunDatasetForSer
-
-
-def get_labels():
-    labels = [
-        "O",
-        "B-QUESTION",
-        "B-ANSWER",
-        "B-HEADER",
-        "I-ANSWER",
-        "I-QUESTION",
-        "I-HEADER",
-    ]
-    return labels
 
 
 def set_seed(args):
@@ -56,7 +43,7 @@ def train(args):
     ch.setLevel(logging.DEBUG)
     logger.addHandler(ch)
 
-    labels = get_labels()
+    label2id_map, id2label_map = get_label_maps(args.label_map_path)
     pad_token_label_id = paddle.nn.CrossEntropyLoss().ignore_index
 
     # dist mode
@@ -78,6 +65,7 @@ def train(args):
         tokenizer,
         data_dir=args.train_data_dir,
         label_path=args.train_label_path,
+        label2id_map=label2id_map,
         img_size=(224, 224),
         pad_token_label_id=pad_token_label_id,
         add_special_ids=False)
@@ -90,7 +78,7 @@ def train(args):
     train_dataloader = paddle.io.DataLoader(
         train_dataset,
         batch_sampler=train_sampler,
-        num_workers=8,
+        num_workers=0,
         use_shared_memory=True,
         collate_fn=None, )
 
@@ -130,6 +118,8 @@ def train(args):
     tr_loss = 0.0
     model.clear_gradients()
     set_seed(args)
+
+    best_metrics = None
 
     for epoch_id in range(args.num_train_epochs):
         for step, batch in enumerate(train_dataloader):
@@ -174,12 +164,30 @@ def train(args):
                         args,
                         model,
                         tokenizer,
-                        labels,
+                        label2id_map,
+                        id2label_map,
                         pad_token_label_id,
                         mode="test", )
+
+                    if best_metrics is None or results["f1"] >= best_metrics[
+                            "f1"]:
+                        best_metrics = copy.deepcopy(results)
+                        output_dir = os.path.join(args.output_dir, "best_model")
+                        os.makedirs(output_dir, exist_ok=True)
+                        if paddle.distributed.get_rank() == 0:
+                            model.save_pretrained(output_dir)
+                            tokenizer.save_pretrained(output_dir)
+                            paddle.save(
+                                args,
+                                os.path.join(output_dir, "training_args.bin"))
+                            logger.info("Saving model checkpoint to %s",
+                                        output_dir)
+
                     logger.info("[epoch {}/{}][iter: {}/{}] results: {}".format(
                         epoch_id, args.num_train_epochs, step,
                         len(train_dataloader), results))
+                    if best_metrics is not None:
+                        logger.info("best metrics: {}".format(best_metrics))
 
             if paddle.distributed.get_rank(
             ) == 0 and args.save_steps > 0 and global_step % args.save_steps == 0:
@@ -200,7 +208,8 @@ def train(args):
 def evaluate(args,
              model,
              tokenizer,
-             labels,
+             label2id_map,
+             id2label_map,
              pad_token_label_id,
              mode,
              prefix=""):
@@ -208,6 +217,7 @@ def evaluate(args,
         tokenizer,
         data_dir=args.eval_data_dir,
         label_path=args.eval_label_path,
+        label2id_map=label2id_map,
         img_size=(224, 224),
         pad_token_label_id=pad_token_label_id,
         add_special_ids=False)
@@ -217,7 +227,7 @@ def evaluate(args,
     eval_dataloader = paddle.io.DataLoader(
         eval_dataset,
         batch_size=args.eval_batch_size,
-        num_workers=8,
+        num_workers=0,
         use_shared_memory=True,
         collate_fn=None, )
 
@@ -269,7 +279,7 @@ def evaluate(args,
     eval_loss = eval_loss / nb_eval_steps
     preds = np.argmax(preds, axis=2)
 
-    label_map = {i: label.upper() for i, label in enumerate(labels)}
+    # label_map = {i: label.upper() for i, label in enumerate(labels)}
 
     out_label_list = [[] for _ in range(out_label_ids.shape[0])]
     preds_list = [[] for _ in range(out_label_ids.shape[0])]
@@ -277,8 +287,8 @@ def evaluate(args,
     for i in range(out_label_ids.shape[0]):
         for j in range(out_label_ids.shape[1]):
             if out_label_ids[i, j] != pad_token_label_id:
-                out_label_list[i].append(label_map[out_label_ids[i][j]])
-                preds_list[i].append(label_map[preds[i][j]])
+                out_label_list[i].append(id2label_map[out_label_ids[i][j]])
+                preds_list[i].append(id2label_map[preds[i][j]])
 
     results = {
         "loss": eval_loss,

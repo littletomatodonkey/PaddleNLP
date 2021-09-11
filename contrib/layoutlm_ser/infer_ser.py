@@ -11,22 +11,8 @@ import random
 import paddle
 
 # relative reference
-from utils import parse_args, get_image_file_list, draw_ser_results
+from utils import parse_args, get_image_file_list, draw_ser_results, get_label_maps
 from paddlenlp.transformers import LayoutXLMModel, LayoutXLMTokenizer, LayoutXLMForTokenClassification
-
-
-# label to draw id
-def get_label_to_id_map():
-    label_to_id_map = {
-        "O": 0,
-        "B-QUESTION": 1,
-        "I-QUESTION": 1,
-        "B-ANSWER": 2,
-        "I-ANSWER": 2,
-        "B-HEADER": 3,
-        "I-HEADER": 3,
-    }
-    return label_to_id_map
 
 
 def get_labels():
@@ -203,7 +189,10 @@ def postprocess(attention_mask, preds):
 def merge_preds_list_with_ocr_info(ocr_info, segment_offset_id, preds_list):
     # must ensure the preds_list is generated from the same image
     preds = [p for pred in preds_list for p in pred]
-    label_to_id_map = get_label_to_id_map()
+    label2id_map, _ = get_label_maps(args.label_map_path)
+    for key in label2id_map:
+        if key.startswith("I-"):
+            label2id_map[key] = label2id_map["B" + key[1:]]
 
     for idx in range(len(segment_offset_id)):
         if idx == 0:
@@ -214,7 +203,7 @@ def merge_preds_list_with_ocr_info(ocr_info, segment_offset_id, preds_list):
         end_id = segment_offset_id[idx]
 
         curr_pred = preds[start_id:end_id]
-        curr_pred = [label_to_id_map[p] for p in curr_pred]
+        curr_pred = [label2id_map[p] for p in curr_pred]
 
         if len(curr_pred) <= 0:
             pred_id = 0

@@ -3,9 +3,9 @@ export CUDA_VISIBLE_DEVICES=1
 
 export PYTHONPATH=../../:$PYTHONPATH
 
-python3.7 -m paddle.distributed.launch \
-    --gpus="1" \
-    train.py \
+# python3.7 -m paddle.distributed.launch \
+#     --gpus="1" \
+python3.7 train.py \
     --model_type "layoutxlm" \
     --model_name_or_path "./layoutxlm-base-paddle/" \
     --max_seq_length 512 \

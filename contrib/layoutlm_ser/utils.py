@@ -12,6 +12,15 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 
+def get_label_maps(label_map_path=None):
+    with open(label_map_path, "r") as fin:
+        lines = fin.readlines()
+    labels = [line.strip() for line in lines]
+    label2id_map = {label: idx for idx, label in enumerate(labels)}
+    id2label_map = {idx: label for idx, label in enumerate(labels)}
+    return label2id_map, id2label_map
+
+
 def get_image_file_list(img_file):
     imgs_lists = []
     if img_file is None or not os.path.exists(img_file):
@@ -32,6 +41,7 @@ def get_image_file_list(img_file):
 
 
 def draw_ser_results(image, ocr_results):
+
     color_map = {
         1: (0, 0, 255),  # question
         2: (0, 255, 0),  # answer
@@ -103,6 +113,12 @@ def parse_args():
     parser.add_argument(
         "--eval_label_path",
         default=None,
+        type=str,
+        required=False, )
+
+    parser.add_argument(
+        "--label_map_path",
+        default="./labels/labels_ser.txt",
         type=str,
         required=False, )
 
