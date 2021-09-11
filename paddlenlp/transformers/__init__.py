@@ -63,3 +63,7 @@ from .layoutlmv2.modeling import *
 from .layoutlmv2.tokenizer import *
 from .layoutxlm.modeling import *
 from .layoutxlm.tokenizer import *
+from .layoutlmv2_pp.modeling import *
+from .layoutlmv2_pp.tokenizer import *
+from .layoutxlm_pp.modeling import *
+from .layoutxlm_pp.tokenizer import *

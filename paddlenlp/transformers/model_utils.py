@@ -218,7 +218,7 @@ class PretrainedModel(Layer, GenerationMixin):
             resource_files["model_config_file"] = os.path.join(
                 COMMUNITY_MODEL_PREFIX, pretrained_model_name_or_path,
                 cls.model_config_file)
-
+        
         default_root = os.path.join(MODEL_HOME, pretrained_model_name_or_path)
         resolved_resource_files = {}
         for file_id, file_path in resource_files.items():
@@ -249,6 +249,7 @@ class PretrainedModel(Layer, GenerationMixin):
         # Did we saved some inputs and kwargs to reload ?
         model_config_file = resolved_resource_files.pop("model_config_file",
                                                         None)
+
         if model_config_file is not None:
             with io.open(model_config_file, encoding="utf-8") as f:
                 init_kwargs = json.load(f)

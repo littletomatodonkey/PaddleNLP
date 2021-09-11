@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import os
 import numpy as np
 import paddle
 import paddle.nn as nn
@@ -21,15 +21,19 @@ import math
 from paddle.nn import TransformerEncoder, Linear, Layer, Embedding, LayerNorm, Tanh
 
 from .. import PretrainedModel, register_base_model
-from .fpn import build_resnet_fpn_backbone
-from .visual_backbone_config import read_config
+# from .fpn import build_resnet_fpn_backbone
+# from .visual_backbone_config import read_config
+from .yolo_model_utils import read_config
+from .resnet import ResNet
+from .yolo_fpn import PPYOLOPAN
 
-from ..layoutlm.modeling import LayoutLMPooler as LayoutLMv2Pooler
+from ..layoutlm.modeling import LayoutLMPooler as LayoutLMv2PPPooler
 
 __all__ = [
-    'LayoutLMv2Model',
-    "LayoutLMv2PretrainedModel",
-    "LayoutLMv2ForTokenClassification",
+    'LayoutLMv2PPModel',
+    "LayoutLMv2PPPretrainedModel",
+    "LayoutLMv2PPForTokenClassification",
+    "LayoutLMv2PPForPretraining",
 ]
 
 
@@ -63,7 +67,7 @@ def relative_position_bucket(relative_position,
     return ret
 
 
-class LayoutLMv2Embeddings(Layer):
+class LayoutLMv2PPEmbeddings(Layer):
     """
     Include embeddings from word, position and token_type embeddings
     """
@@ -173,7 +177,7 @@ class LayoutLMv2Embeddings(Layer):
         return embeddings
 
 
-class LayoutLMv2PretrainedModel(PretrainedModel):
+class LayoutLMv2PPPretrainedModel(PretrainedModel):
     model_config_file = "model_config.json"
     pretrained_init_configuration = {
         "layoutlm-base-uncased": {
@@ -192,7 +196,7 @@ class LayoutLMv2PretrainedModel(PretrainedModel):
             "max_position_embeddings": 512,
             "max_rel_2d_pos": 256,
             "max_rel_pos": 128,
-            "model_type": "layoutlmv2",
+            "model_type": "layoutlmv2-pp",
             "num_attention_heads": 12,
             "num_hidden_layers": 12,
             "output_past": True,
@@ -214,7 +218,7 @@ class LayoutLMv2PretrainedModel(PretrainedModel):
             "https://paddlenlp.bj.bcebos.com/models/transformers/layoutlmv2-base-uncased.pdparams",
         }
     }
-    base_model_prefix = "layoutlmv2"
+    base_model_prefix = "layoutlmv2-pp"
 
     def init_weights(self, layer):
         """ Initialization hook """
@@ -231,7 +235,7 @@ class LayoutLMv2PretrainedModel(PretrainedModel):
                         shape=layer.weight.shape))
 
 
-class LayoutLMv2SelfOutput(nn.Layer):
+class LayoutLMv2PPSelfOutput(nn.Layer):
     def __init__(self, config):
         super().__init__()
         self.dense = nn.Linear(config["hidden_size"], config["hidden_size"])
@@ -246,7 +250,7 @@ class LayoutLMv2SelfOutput(nn.Layer):
         return hidden_states
 
 
-class LayoutLMv2SelfAttention(nn.Layer):
+class LayoutLMv2PPSelfAttention(nn.Layer):
     def __init__(self, config):
         super().__init__()
         if config["hidden_size"] % config[
@@ -352,11 +356,11 @@ class LayoutLMv2SelfAttention(nn.Layer):
         return outputs
 
 
-class LayoutLMv2Attention(nn.Layer):
+class LayoutLMv2PPAttention(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.self = LayoutLMv2SelfAttention(config)
-        self.output = LayoutLMv2SelfOutput(config)
+        self.self = LayoutLMv2PPSelfAttention(config)
+        self.output = LayoutLMv2PPSelfOutput(config)
 
     def forward(
             self,
@@ -385,12 +389,12 @@ class LayoutLMv2Attention(nn.Layer):
         return outputs
 
 
-class LayoutLMv2Encoder(nn.Layer):
+class LayoutLMv2PPEncoder(nn.Layer):
     def __init__(self, config):
         super().__init__()
         self.config = config
         self.layer = nn.LayerList([
-            LayoutLMv2Layer(config) for _ in range(config["num_hidden_layers"])
+            LayoutLMv2PPLayer(config) for _ in range(config["num_hidden_layers"])
         ])
 
         self.has_relative_attention_bias = config["has_relative_attention_bias"]
@@ -508,7 +512,7 @@ class LayoutLMv2Encoder(nn.Layer):
         return (hidden_states, )
 
 
-class LayoutLMv2Intermediate(nn.Layer):
+class LayoutLMv2PPIntermediate(nn.Layer):
     def __init__(self, config):
         super().__init__()
         self.dense = nn.Linear(config["hidden_size"],
@@ -525,7 +529,7 @@ class LayoutLMv2Intermediate(nn.Layer):
         return hidden_states
 
 
-class LayoutLMv2Output(nn.Layer):
+class LayoutLMv2PPOutput(nn.Layer):
     def __init__(self, config):
         super().__init__()
         self.dense = nn.Linear(config["intermediate_size"],
@@ -541,16 +545,16 @@ class LayoutLMv2Output(nn.Layer):
         return hidden_states
 
 
-class LayoutLMv2Layer(nn.Layer):
+class LayoutLMv2PPLayer(nn.Layer):
     def __init__(self, config):
         super().__init__()
         # since chunk_size_feed_forward is 0 as default, no chunk is needed here.
         self.seq_len_dim = 1
-        self.attention = LayoutLMv2Attention(config)
+        self.attention = LayoutLMv2PPAttention(config)
         # https://github.com/huggingface/transformers/blob/b6f332ecaf18054109294dd2efa1a5e6aa274a03/src/transformers/configuration_utils.py#L86
         self.add_cross_attention = False  # default as false
-        self.intermediate = LayoutLMv2Intermediate(config)
-        self.output = LayoutLMv2Output(config)
+        self.intermediate = LayoutLMv2PPIntermediate(config)
+        self.output = LayoutLMv2PPOutput(config)
 
     def feed_forward_chunk(self, attention_output):
         intermediate_output = self.intermediate(attention_output)
@@ -593,41 +597,53 @@ class LayoutLMv2Layer(nn.Layer):
 class VisualBackbone(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.cfg = read_config()
-        self.backbone = build_resnet_fpn_backbone(self.cfg)
-        # syncbn is removed cause that will cause import of torch
+        dir_name = os.path.dirname(os.path.abspath(__file__))
+        fp = os.path.join(dir_name, "ppyolov2_r50vd_dcn.yml")
+        cfg = read_config(fp)
+        depth = cfg.ResNet.depth
+        variant = cfg.ResNet.variant
+        return_idx = cfg.ResNet.return_idx
+        dcn_v2_stages = cfg.ResNet.dcn_v2_stages
+        freeze_at = cfg.ResNet.freeze_at
+        freeze_norm = cfg.ResNet.freeze_norm
+        norm_decay = cfg.ResNet.norm_decay
+        norm_type = cfg.norm_type
+        self.resnet = ResNet(depth=depth, variant=variant, return_idx=return_idx,
+                       dcn_v2_stages=dcn_v2_stages, freeze_at=freeze_at,
+                       freeze_norm=freeze_norm, norm_decay=norm_decay,
+                       norm_type=norm_type)
+        drop_block = cfg.PPYOLOPAN.drop_block
+        block_size = cfg.PPYOLOPAN.block_size
+        keep_prob = cfg.PPYOLOPAN.keep_prob
+        spp = cfg.PPYOLOPAN.spp        
+        self.fpn = PPYOLOPAN(drop_block=drop_block, block_size=block_size,
+                        keep_prob=keep_prob, spp=spp)
 
-        assert len(self.cfg.MODEL.PIXEL_MEAN) == len(self.cfg.MODEL.PIXEL_STD)
-        num_channels = len(self.cfg.MODEL.PIXEL_MEAN)
-        self.register_buffer(
-            "pixel_mean",
-            paddle.to_tensor(self.cfg.MODEL.PIXEL_MEAN).reshape(
-                [num_channels, 1, 1]))
-        self.register_buffer("pixel_std",
-                             paddle.to_tensor(self.cfg.MODEL.PIXEL_STD).reshape(
-                                 [num_channels, 1, 1]))
-        self.out_feature_key = "p2"
-        # is_deterministic is disabled here.
         self.pool = nn.AdaptiveAvgPool2D(config["image_feature_pool_shape"][:2])
-        if len(config["image_feature_pool_shape"]) == 2:
-            config["image_feature_pool_shape"].append(
-                self.backbone.output_shape()[self.out_feature_key].channels)
-        assert self.backbone.output_shape(
-        )[self.out_feature_key].channels == config["image_feature_pool_shape"][
-            2]
+        
+#         info = paddle.load(cfg.pretrain_weights)
+#         resnet_state_dict = self.resnet.state_dict()
+#         fpn_state_dict = self.fpn.state_dict()
 
+#         trans_info = {}
+#         for key in resnet_state_dict:
+#             trans_info[key] = info["backbone." + key]
+#         for key in fpn_state_dict:
+#             trans_info[key] = info["neck." + key]
+
+#         self.resnet.load_dict(trans_info)
+#         self.fpn.load_dict(trans_info)
+    
     def forward(self, images):
-        images_input = (
-            paddle.to_tensor(images) - self.pixel_mean) / self.pixel_std
-        features = self.backbone(images_input)
-        features = features[self.out_feature_key]
-        features = self.pool(features).flatten(start_axis=2).transpose(
+        body_feats = self.resnet({'image':images})
+        features = self.fpn(body_feats)
+        features = self.pool(features[2]).flatten(start_axis=2).transpose(
             [0, 2, 1])
         return features
 
 
 @register_base_model
-class LayoutLMv2Model(LayoutLMv2PretrainedModel):
+class LayoutLMv2PPModel(LayoutLMv2PPPretrainedModel):
     """
     The bare BERT Model transformer outputting raw hidden-states without any specific head on top.
 
@@ -673,10 +689,9 @@ class LayoutLMv2Model(LayoutLMv2PretrainedModel):
             **kwargs, ):
         super().__init__()
         config = kwargs
-        self.config = kwargs
         self.has_visual_segment_embedding = config[
             "has_visual_segment_embedding"]
-        self.embeddings = LayoutLMv2Embeddings(config)
+        self.embeddings = LayoutLMv2PPEmbeddings(config)
 
         self.visual = VisualBackbone(config)
         self.visual_proj = nn.Linear(config["image_feature_pool_shape"][-1],
@@ -688,8 +703,8 @@ class LayoutLMv2Model(LayoutLMv2PretrainedModel):
             config["hidden_size"], epsilon=config["layer_norm_eps"])
         self.visual_dropout = nn.Dropout(config["hidden_dropout_prob"])
 
-        self.encoder = LayoutLMv2Encoder(config)
-        self.pooler = LayoutLMv2Pooler(config["hidden_size"], with_pool)
+        self.encoder = LayoutLMv2PPEncoder(config)
+        self.pooler = LayoutLMv2PPPooler(config["hidden_size"], with_pool)
         self.apply(self.init_weights)
 
     def _calc_text_embeddings(self, input_ids, bbox, position_ids,
@@ -828,7 +843,7 @@ class LayoutLMv2Model(LayoutLMv2PretrainedModel):
         return sequence_output, pooled_output
 
 
-class LayoutLMv2ForTokenClassification(LayoutLMv2PretrainedModel):
+class LayoutLMv2PPForTokenClassification(LayoutLMv2PPPretrainedModel):
     def __init__(self, layoutlm, num_classes=2, dropout=None):
         super().__init__()
         self.num_classes = num_classes
@@ -887,3 +902,99 @@ class LayoutLMv2ForTokenClassification(LayoutLMv2PretrainedModel):
             outputs = (loss, ) + outputs
 
         return outputs
+
+class LayoutLMv2PPLMPredictionHead(nn.Layer):
+    r"""
+    Bert Model with a `language modeling` head on top.
+    """
+
+    def __init__(
+            self,
+            hidden_size,
+            vocab_size,
+            activation,
+            embedding_weights=None,
+            weight_attr=None, ):
+        super(LayoutLMv2PPLMPredictionHead, self).__init__()
+
+        self.transform = nn.Linear(
+            hidden_size, hidden_size, weight_attr=weight_attr)
+        self.activation = getattr(nn.functional, activation)
+        self.layer_norm = nn.LayerNorm(hidden_size)
+        self.decoder_weight = self.create_parameter(
+            shape=[vocab_size, hidden_size],
+            dtype=self.transform.weight.dtype,
+            attr=weight_attr,
+            is_bias=False) if embedding_weights is None else embedding_weights
+        self.decoder_bias = self.create_parameter(
+            shape=[vocab_size], dtype=self.decoder_weight.dtype, is_bias=True)
+
+    def forward(self, hidden_states, masked_positions=None):
+        if masked_positions is not None:
+            hidden_states = paddle.reshape(hidden_states,
+                                           [-1, hidden_states.shape[-1]])
+            hidden_states = paddle.tensor.gather(hidden_states,
+                                                 masked_positions)
+        # gather masked tokens might be more quick
+        hidden_states = self.transform(hidden_states)
+        hidden_states = self.activation(hidden_states)
+        hidden_states = self.layer_norm(hidden_states)
+        hidden_states = paddle.tensor.matmul(
+            hidden_states, self.decoder_weight,
+            transpose_y=True) + self.decoder_bias
+        return hidden_states
+    
+class LayoutLMv2PPPretrainingHeads(nn.Layer):
+    def __init__(
+            self,
+            hidden_size,
+            vocab_size,
+            activation,
+            embedding_weights=None,
+            weight_attr=None, ):
+        super(LayoutLMv2PPPretrainingHeads, self).__init__()
+        self.predictions = LayoutLMv2PPLMPredictionHead(
+            hidden_size, vocab_size, activation, embedding_weights, weight_attr)
+#         self.seq_relationship = nn.Linear(
+#             hidden_size, 2, weight_attr=weight_attr)
+
+    def forward(self, sequence_output, masked_positions=None):
+        prediction_scores = self.predictions(sequence_output, masked_positions)
+        return prediction_scores
+
+class LayoutLMv2PPForPretraining(LayoutLMv2PPPretrainedModel):
+    def __init__(self, layoutlm):
+        super().__init__()
+        self.layoutlmv2 = layoutlm
+
+        weight_attr = paddle.ParamAttr(initializer=nn.initializer.Normal(
+            mean=0.0, std=self.layoutlmv2.config['initializer_range']))
+        self.cls = LayoutLMv2PPPretrainingHeads(
+            self.layoutlmv2.config["hidden_size"],
+            self.layoutlmv2.config["vocab_size"],
+            self.layoutlmv2.config["hidden_act"],
+            embedding_weights=self.layoutlmv2.embeddings.word_embeddings.weight,
+            weight_attr=weight_attr, )
+
+        self.apply(self.init_weights)
+
+    def forward(self,
+            input_ids=None,
+            bbox=None,
+            image=None,
+            attention_mask=None,
+            token_type_ids=None,
+            position_ids=None,
+            head_mask=None,
+            masked_positions=None):
+        outputs = self.layoutlmv2(
+            input_ids=input_ids,
+            bbox=bbox,
+            image=image,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask, )
+        sequence_output, _ = outputs[:2]
+        prediction_scores = self.cls(sequence_output, masked_positions)
+        return prediction_scores

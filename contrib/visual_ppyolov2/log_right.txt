@@ -1,0 +1,23 @@
+grep: warning: GREP_OPTIONS is deprecated; please use an alias or script
+W0910 09:17:03.947423  7706 device_context.cc:446] Please NOTE: device: 0, GPU Compute Capability: 6.1, Driver API Version: 10.2, Runtime API Version: 10.2
+W0910 09:17:03.953274  7706 device_context.cc:464] device: 0, cuDNN Version: 7.6.
+[09/10 09:17:08] ppdet.utils.checkpoint INFO: The shape [33] in pretrained weight yolo_head.yolo_output.0.bias is unmatched with the shape [258] in model yolo_head.yolo_output.0.bias. And the weight yolo_head.yolo_output.0.bias will not be loaded
+[09/10 09:17:08] ppdet.utils.checkpoint INFO: The shape [33, 1024, 1, 1] in pretrained weight yolo_head.yolo_output.0.weight is unmatched with the shape [258, 1024, 1, 1] in model yolo_head.yolo_output.0.weight. And the weight yolo_head.yolo_output.0.weight will not be loaded
+[09/10 09:17:08] ppdet.utils.checkpoint INFO: The shape [33] in pretrained weight yolo_head.yolo_output.1.bias is unmatched with the shape [258] in model yolo_head.yolo_output.1.bias. And the weight yolo_head.yolo_output.1.bias will not be loaded
+[09/10 09:17:08] ppdet.utils.checkpoint INFO: The shape [33, 512, 1, 1] in pretrained weight yolo_head.yolo_output.1.weight is unmatched with the shape [258, 512, 1, 1] in model yolo_head.yolo_output.1.weight. And the weight yolo_head.yolo_output.1.weight will not be loaded
+[09/10 09:17:08] ppdet.utils.checkpoint INFO: The shape [33] in pretrained weight yolo_head.yolo_output.2.bias is unmatched with the shape [258] in model yolo_head.yolo_output.2.bias. And the weight yolo_head.yolo_output.2.bias will not be loaded
+[09/10 09:17:08] ppdet.utils.checkpoint INFO: The shape [33, 256, 1, 1] in pretrained weight yolo_head.yolo_output.2.weight is unmatched with the shape [258, 256, 1, 1] in model yolo_head.yolo_output.2.weight. And the weight yolo_head.yolo_output.2.weight will not be loaded
+[09/10 09:17:08] ppdet.utils.checkpoint INFO: Finish loading model weights: visual_ppyolov2/publaynet_ppyolov2/ppyolov2_r50vd_dcn_365e_publaynet_pretrained.pdparams
+Warning: import ppdet from source directory without installing, run 'python setup.py install' to install ppdet firstly
+ORI: [1, 1024, 20, 20] Tensor(shape=[10], dtype=float32, place=CUDAPlace(0), stop_gradient=False,
+       [0.01958414, 0.02680594, 0.02602419, 0.01749577, 0.02164659, 0.02869415, 0.04288847, 0.04012158, 0.04413934, 0.03834919])
+ORI: [1, 512, 40, 40] Tensor(shape=[10], dtype=float32, place=CUDAPlace(0), stop_gradient=False,
+       [-0.01258773, -0.00053463, -0.01018273, -0.00536448,  0.00515562,  0.00407134, -0.00212298, -0.00223059, -0.00545051, -0.00195259])
+ORI: [1, 256, 80, 80] Tensor(shape=[10], dtype=float32, place=CUDAPlace(0), stop_gradient=False,
+       [0.02010807, 0.01683242, 0.03187155, 0.01929165, 0.02156992, 0.02319042, 0.02620952, 0.02441690, 0.01748805, 0.01675564])
+New: [1, 1024, 20, 20] Tensor(shape=[10], dtype=float32, place=CUDAPlace(0), stop_gradient=False,
+       [0.01958416, 0.02680595, 0.02602420, 0.01749578, 0.02164660, 0.02869414, 0.04288848, 0.04012156, 0.04413934, 0.03834919])
+New: [1, 512, 40, 40] Tensor(shape=[10], dtype=float32, place=CUDAPlace(0), stop_gradient=False,
+       [-0.01258773, -0.00053463, -0.01018273, -0.00536448,  0.00515562,  0.00407135, -0.00212297, -0.00223060, -0.00545051, -0.00195259])
+New: [1, 256, 80, 80] Tensor(shape=[10], dtype=float32, place=CUDAPlace(0), stop_gradient=False,
+       [0.02010807, 0.01683242, 0.03187154, 0.01929165, 0.02156992, 0.02319042, 0.02620952, 0.02441690, 0.01748805, 0.01675564])

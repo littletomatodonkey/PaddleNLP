@@ -1,10 +1,10 @@
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=7
 
 export PYTHONPATH=../../:$PYTHONPATH
 
 python3.7 train.py \
     --data_dir "./SROIE/anno" \
-    --model_type "layoutlm" \
+    --model_type "layoutxlm" \
     --model_name_or_path "./layoutlm-base-uncased-paddle" \
     --do_lower_case \
     --max_seq_length 512 \
@@ -15,6 +15,6 @@ python3.7 train.py \
     --save_steps 500 \
     --output_dir "output/" \
     --labels "./SROIE/anno/labels.txt" \
-    --per_gpu_train_batch_size 16 \
-    --per_gpu_eval_batch_size 16 \
+    --per_gpu_train_batch_size 8 \
+    --per_gpu_eval_batch_size 8 \
     --evaluate_during_training
