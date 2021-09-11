@@ -41,11 +41,16 @@ def get_image_file_list(img_file):
 
 
 def draw_ser_results(image, ocr_results):
-
+    np.random.seed(0)
+    color = (np.random.permutation(range(255)),
+             np.random.permutation(range(255)),
+             np.random.permutation(range(255)))
     color_map = {
-        1: (0, 0, 255),  # question
-        2: (0, 255, 0),  # answer
-        3: (255, 0, 0),  # header
+        idx: (color[0][idx], color[1][idx], color[2][idx])
+        for idx in range(1, 255)
+        # 1: (0, 0, 255),  # question
+        # 2: (0, 255, 0),  # answer
+        # 3: (255, 0, 0),  # header
     }
     if isinstance(image, np.ndarray):
         image = Image.fromarray(image)
