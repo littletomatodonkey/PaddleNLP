@@ -55,7 +55,8 @@ def train(args):
     # for training process, model is needed for the bert class
     # else it can directly loaded for the downstream task
     model = LayoutXLMModel.from_pretrained(args.model_name_or_path)
-    model = LayoutXLMForTokenClassification(model, num_classes=7, dropout=None)
+    model = LayoutXLMForTokenClassification(
+        model, num_classes=len(label2id_map), dropout=None)
 
     # dist mode
     if paddle.distributed.get_world_size() > 1:
