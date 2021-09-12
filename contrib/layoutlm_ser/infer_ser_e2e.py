@@ -199,6 +199,16 @@ def merge_preds_list_with_ocr_info(ocr_info, segment_offset_id, preds_list,
     # must ensure the preds_list is generated from the same image
     preds = [p for pred in preds_list for p in pred]
 
+    id2label_map = dict()
+    for key in label2id_map_for_draw:
+        val = label2id_map_for_draw[key]
+        if key == "O":
+            id2label_map[val] = key
+        if key.startswith("B-") or key.startswith("I-"):
+            id2label_map[val] = key[2:]
+        else:
+            id2label_map[val] = key
+
     for idx in range(len(segment_offset_id)):
         if idx == 0:
             start_id = 0
@@ -215,7 +225,8 @@ def merge_preds_list_with_ocr_info(ocr_info, segment_offset_id, preds_list,
         else:
             counts = np.bincount(curr_pred)
             pred_id = np.argmax(counts)
-        ocr_info[idx]["pred_id"] = pred_id
+        ocr_info[idx]["pred_id"] = int(pred_id)
+        ocr_info[idx]["pred"] = id2label_map[int(pred_id)]
     return ocr_info
 
 
@@ -282,45 +293,52 @@ def infer(args):
                                   args.ocr_det_model_dir)
 
     # loop for infer
-    for idx, img_path in enumerate(infer_imgs):
-        print("process: [{}/{}]".format(idx, len(infer_imgs), img_path))
+    with open(os.path.join(args.output_dir, "infer_results.txt"), "w") as fout:
+        for idx, img_path in enumerate(infer_imgs):
+            print("process: [{}/{}]".format(idx, len(infer_imgs), img_path))
 
-        img = cv2.imread(img_path)
+            img = cv2.imread(img_path)
 
-        ocr_result = ocr_engine.ocr(img_path, cls=False)
+            ocr_result = ocr_engine.ocr(img_path, cls=False)
 
-        img_ocr = render_ocr_results_on_image(img_path, ocr_result)
-        img_ocr.save(
-            os.path.join(args.output_dir,
-                         os.path.splitext(os.path.basename(img_path))[0] +
-                         ".jpg"))
+            img_ocr = render_ocr_results_on_image(img_path, ocr_result)
+            img_ocr.save(
+                os.path.join(args.output_dir,
+                             os.path.splitext(os.path.basename(img_path))[0] +
+                             ".jpg"))
 
-        ocr_info = parse_ocr_info_for_ser(ocr_result)
+            ocr_info = parse_ocr_info_for_ser(ocr_result)
 
-        inputs = preprocess(
-            tokenizer=tokenizer,
-            ori_img=img,
-            ocr_info=ocr_info,
-            max_seq_len=args.max_seq_length)
+            inputs = preprocess(
+                tokenizer=tokenizer,
+                ori_img=img,
+                ocr_info=ocr_info,
+                max_seq_len=args.max_seq_length)
 
-        outputs = model(
-            input_ids=inputs["input_ids"],
-            bbox=inputs["bbox"],
-            image=inputs["image"],
-            token_type_ids=inputs["token_type_ids"],
-            attention_mask=inputs["attention_mask"])
+            outputs = model(
+                input_ids=inputs["input_ids"],
+                bbox=inputs["bbox"],
+                image=inputs["image"],
+                token_type_ids=inputs["token_type_ids"],
+                attention_mask=inputs["attention_mask"])
 
-        preds = outputs[0]
-        preds = postprocess(inputs["attention_mask"], preds, id2label_map)
-        ocr_info = merge_preds_list_with_ocr_info(
-            ocr_info, inputs["segment_offset_id"], preds, label2id_map_for_draw)
+            preds = outputs[0]
+            preds = postprocess(inputs["attention_mask"], preds, id2label_map)
+            ocr_info = merge_preds_list_with_ocr_info(
+                ocr_info, inputs["segment_offset_id"], preds,
+                label2id_map_for_draw)
 
-        img_res = draw_ser_results(img, ocr_info)
-        cv2.imwrite(
-            os.path.join(
-                args.output_dir,
-                os.path.splitext(os.path.basename(img_path))[0] + ".jpg"),
-            img_res)
+            fout.write(img_path + "\t" + json.dumps(
+                {
+                    "ocr_info": ocr_info,
+                }, ensure_ascii=False) + "\n")
+
+            img_res = draw_ser_results(img, ocr_info)
+            cv2.imwrite(
+                os.path.join(
+                    args.output_dir,
+                    os.path.splitext(os.path.basename(img_path))[0] + ".jpg"),
+                img_res)
 
     return
 
