@@ -305,7 +305,7 @@ def infer(args):
             img_ocr.save(
                 os.path.join(args.output_dir,
                              os.path.splitext(os.path.basename(img_path))[0] +
-                             ".jpg"))
+                             "_ocr.jpg"))
 
             ocr_info = parse_ocr_info_for_ser(ocr_result)
 
@@ -335,10 +335,9 @@ def infer(args):
 
             img_res = draw_ser_results(img, ocr_info)
             cv2.imwrite(
-                os.path.join(
-                    args.output_dir,
-                    os.path.splitext(os.path.basename(img_path))[0] + ".jpg"),
-                img_res)
+                os.path.join(args.output_dir,
+                             os.path.splitext(os.path.basename(img_path))[0] +
+                             "_ser.jpg"), img_res)
 
     return
 

@@ -12,13 +12,20 @@ def draw_cases():
         )
         for img_name in imgs:
             img_path = "./output_res_v1/{}".format(img_name)
-            img_e2e_path = "./output_e2e_v1/{}".format(img_name)
+            img_e2e_ocr_path = "./output_e2e_v1/{}_ocr.jpg".format(
+                os.path.splitext(img_name)[0])
+            img_e2e_ser_path = "./output_e2e_v1/{}_ser.jpg".format(
+                os.path.splitext(img_name)[0])
 
             html.write("<tr>\n")
             html.write('<td>%s</td>' % (img_name))
-            html.write('<td><img src="../%s" width=640></td>' % (img_path))
+            html.write('<td><img src="../%s" height=960></td>' % (img_path))
 
-            html.write('<td><img src="../%s" width=640></td>' % (img_e2e_path))
+            html.write('<td><img src="../%s" height=960></td>' %
+                       (img_e2e_ser_path))
+
+            html.write('<td><img src="../%s" height=960></td>' %
+                       (img_e2e_ocr_path))
             html.write("</tr>\n")
         html.write('</table>\n')
         html.write('</html>\n</body>\n')
