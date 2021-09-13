@@ -1,15 +1,15 @@
 from .. import PretrainedModel, register_base_model
-from ..layoutlmv2.modeling import LayoutLMv2Model, LayoutLMv2ForTokenClassification, LayoutLMv2ForPretraining
+from ..layoutlmv2_pp.modeling import LayoutLMv2PPModel, LayoutLMv2PPForTokenClassification, LayoutLMv2PPForPretraining
 
 __all__ = [
-    "LayoutXLMModel",
-    "LayoutXLMForTokenClassification",
-    "LayoutXLMForPretraining"
+    "LayoutXLMPPModel",
+    "LayoutXLMPPForTokenClassification",
+    "LayoutXLMPPForPretraining",
 ]
 
 
 @register_base_model
-class LayoutXLMModel(LayoutLMv2Model):
+class LayoutXLMPPModel(LayoutLMv2PPModel):
     model_config_file = "model_config.json"
     pretrained_init_configuration = {
         "layoutxlm-base": {
@@ -44,7 +44,7 @@ class LayoutXLMModel(LayoutLMv2Model):
             "type_vocab_size": 1,
             "vocab_size": 250002,
             "tokenizer_class": "XLMRobertaTokenizer",
-            "init_class": "LayoutXLMModel"
+            "init_class": "LayoutXLMPPModel"
         }
     }
     resource_files_names = {"model_state": "model_state.pdparams"}
@@ -58,11 +58,11 @@ class LayoutXLMModel(LayoutLMv2Model):
 
 
 @register_base_model
-class LayoutXLMForTokenClassification(LayoutLMv2ForTokenClassification):
+class LayoutXLMPPForTokenClassification(LayoutLMv2PPForTokenClassification):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-    
 
-class LayoutXLMForPretraining(LayoutLMv2ForPretraining):
+@register_base_model
+class LayoutXLMPPForPretraining(LayoutLMv2PPForPretraining):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
