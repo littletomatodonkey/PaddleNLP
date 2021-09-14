@@ -62,7 +62,8 @@ class LayoutXLMForTokenClassification(LayoutLMv2ForTokenClassification):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
     
-
+    
+@register_base_model
 class LayoutXLMForPretraining(LayoutLMv2ForPretraining):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

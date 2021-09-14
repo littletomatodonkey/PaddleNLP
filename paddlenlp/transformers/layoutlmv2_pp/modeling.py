@@ -843,6 +843,7 @@ class LayoutLMv2PPModel(LayoutLMv2PPPretrainedModel):
         return sequence_output, pooled_output
 
 
+@register_base_model
 class LayoutLMv2PPForTokenClassification(LayoutLMv2PPPretrainedModel):
     def __init__(self, layoutlm, num_classes=2, dropout=None):
         super().__init__()
@@ -903,6 +904,7 @@ class LayoutLMv2PPForTokenClassification(LayoutLMv2PPPretrainedModel):
 
         return outputs
 
+    
 class LayoutLMv2PPLMPredictionHead(nn.Layer):
     r"""
     Bert Model with a `language modeling` head on top.
@@ -944,6 +946,7 @@ class LayoutLMv2PPLMPredictionHead(nn.Layer):
             transpose_y=True) + self.decoder_bias
         return hidden_states
     
+    
 class LayoutLMv2PPPretrainingHeads(nn.Layer):
     def __init__(
             self,
@@ -962,6 +965,8 @@ class LayoutLMv2PPPretrainingHeads(nn.Layer):
         prediction_scores = self.predictions(sequence_output, masked_positions)
         return prediction_scores
 
+
+@register_base_model
 class LayoutLMv2PPForPretraining(LayoutLMv2PPPretrainedModel):
     def __init__(self, layoutlm):
         super().__init__()

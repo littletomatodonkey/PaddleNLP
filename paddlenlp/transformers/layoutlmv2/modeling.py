@@ -949,7 +949,8 @@ class LayoutLMv2PretrainingHeads(Layer):
         prediction_scores = self.predictions(sequence_output, masked_positions)
         return prediction_scores
 
-
+    
+@register_base_model
 class LayoutLMv2ForPretraining(LayoutLMv2PretrainedModel):
     def __init__(self, layoutlm):
         super(LayoutLMv2ForPretraining, self).__init__()
@@ -972,11 +973,6 @@ class LayoutLMv2ForPretraining(LayoutLMv2PretrainedModel):
             position_ids=None,
             head_mask=None,
             masked_positions=None):
-#         print("input_ids: ", input_ids.shape)
-#         print("bbox: ", bbox.shape)
-#         print("attention_mask: ", attention_mask.shape)
-#         print("masked_positions: ", masked_positions.shape)
-#         print("image: ", image.shape)
         outputs = self.layoutlmv2(
             input_ids=input_ids,
             bbox=bbox,
@@ -985,8 +981,6 @@ class LayoutLMv2ForPretraining(LayoutLMv2PretrainedModel):
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             head_mask=head_mask, )
-#         seq_length = input_ids.shape[1]
-#         sequence_output = outputs[0][:, :seq_length]
         sequence_output = outputs[0]
         prediction_scores = self.cls(sequence_output, masked_positions)
         return prediction_scores
