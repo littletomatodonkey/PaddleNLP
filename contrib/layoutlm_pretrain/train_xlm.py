@@ -179,7 +179,10 @@ def train(args):
                                           "checkpoint-{}".format(global_step))
                 os.makedirs(output_dir, exist_ok=True)
                 if paddle.distributed.get_rank() == 0:
-                    model.save_pretrained(output_dir)
+                    if paddle.distributed.get_world_size() > 1:
+                        model._layers.save_pretrained(output_dir)
+                    else:
+                        model.save_pretrained(output_dir)
                     tokenizer.save_pretrained(output_dir)
                     paddle.save(args,
                                 os.path.join(output_dir, "training_args.bin"))

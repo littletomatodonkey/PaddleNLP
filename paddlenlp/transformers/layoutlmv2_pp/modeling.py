@@ -705,7 +705,7 @@ class LayoutLMv2PPModel(LayoutLMv2PPPretrainedModel):
 
         self.encoder = LayoutLMv2PPEncoder(config)
         self.pooler = LayoutLMv2PPPooler(config["hidden_size"], with_pool)
-        self.apply(self.init_weights)
+#         self.apply(self.init_weights)
 
     def _calc_text_embeddings(self, input_ids, bbox, position_ids,
                               token_type_ids):
@@ -976,7 +976,7 @@ class LayoutLMv2PPForPretraining(LayoutLMv2PPPretrainedModel):
             embedding_weights=self.layoutlmv2.embeddings.word_embeddings.weight,
             weight_attr=weight_attr, )
 
-        self.apply(self.init_weights)
+#         self.apply(self.init_weights)
 
     def forward(self,
             input_ids=None,
