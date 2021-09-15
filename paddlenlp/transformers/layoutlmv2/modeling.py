@@ -682,6 +682,7 @@ class LayoutLMv2Model(LayoutLMv2PretrainedModel):
         self.embeddings = LayoutLMv2Embeddings(config)
 
         self.visual = VisualBackbone(config)
+        self.visual.stop_gradient = True
         self.visual_proj = nn.Linear(config["image_feature_pool_shape"][-1],
                                      config["hidden_size"])
         if self.has_visual_segment_embedding:
@@ -693,7 +694,7 @@ class LayoutLMv2Model(LayoutLMv2PretrainedModel):
 
         self.encoder = LayoutLMv2Encoder(config)
         self.pooler = LayoutLMv2Pooler(config["hidden_size"], with_pool)
-        self.apply(self.init_weights)
+#         self.apply(self.init_weights)
 
     def _calc_text_embeddings(self, input_ids, bbox, position_ids,
                               token_type_ids):
