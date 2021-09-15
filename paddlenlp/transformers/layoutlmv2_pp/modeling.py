@@ -694,6 +694,7 @@ class LayoutLMv2PPModel(LayoutLMv2PPPretrainedModel):
         self.embeddings = LayoutLMv2PPEmbeddings(config)
 
         self.visual = VisualBackbone(config)
+        self.visual.stop_gradient = True
         self.visual_proj = nn.Linear(config["image_feature_pool_shape"][-1],
                                      config["hidden_size"])
         if self.has_visual_segment_embedding:

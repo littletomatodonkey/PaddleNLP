@@ -35,7 +35,8 @@ def _collate_data(data, stack_fn=Stack()):
     mask_token_num = 0
     for i, x in enumerate(data):
         for j, pos in enumerate(x[4]):
-            out[4][mask_token_num] = i * seq_length + pos
+#             out[4][mask_token_num] = i * seq_length + pos
+            out[4][mask_token_num] = i * (seq_length + 49) + pos
             out[5][mask_token_num] = x[5][j]
             mask_token_num += 1
     # mask_token_num
