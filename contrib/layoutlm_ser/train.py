@@ -19,6 +19,7 @@ from seqeval.metrics import (
 # relative reference
 from utils import parse_args, get_label_maps
 from paddlenlp.transformers import LayoutXLMModel, LayoutXLMTokenizer, LayoutXLMForTokenClassification
+from paddlenlp.transformers import LayoutXLMPPModel, LayoutXLMPPTokenizer, LayoutXLMPPForTokenClassification
 
 from xfun_dataset import XfunDatasetForSer
 
@@ -52,12 +53,19 @@ def train(args):
 
     tokenizer = LayoutXLMTokenizer.from_pretrained(args.model_name_or_path)
 
-    # for training process, model is needed for the bert class
-    # else it can directly loaded for the downstream task
-    model = LayoutXLMModel.from_pretrained(args.model_name_or_path)
+#     # for training process, model is needed for the bert class
+#     # else it can directly loaded for the downstream task
+#     model = LayoutXLMModel.from_pretrained(args.model_name_or_path)
+#     model = LayoutXLMForTokenClassification(
+#         model, num_classes=len(label2id_map), dropout=None)
+
+    if args.model_type == "layoutxlm":
+        model = LayoutXLMModel.from_pretrained(args.model_name_or_path)
+    elif args.model_type == "layoutxlm-pp":
+        model = LayoutXLMPPModel.from_pretrained(args.model_name_or_path)
     model = LayoutXLMForTokenClassification(
         model, num_classes=len(label2id_map), dropout=None)
-
+    
     # dist mode
     if paddle.distributed.get_world_size() > 1:
         model = paddle.distributed.DataParallel(model)
