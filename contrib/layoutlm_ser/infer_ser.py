@@ -166,14 +166,14 @@ def preprocess(
     return encoded_inputs
 
 
-def postprocess(attention_mask, preds):
+def postprocess(attention_mask, preds, label_map_path):
     if isinstance(preds, paddle.Tensor):
         preds = preds.numpy()
     preds = np.argmax(preds, axis=2)
 
-    labels = get_labels()
+    _, label_map = get_label_maps(label_map_path)
 
-    label_map = {i: label.upper() for i, label in enumerate(labels)}
+    # label_map = {i: label.upper() for i, label in enumerate(labels)}
 
     preds_list = [[] for _ in range(preds.shape[0])]
 
@@ -270,7 +270,7 @@ def infer(args):
                 attention_mask=inputs["attention_mask"])
 
             preds = outputs[0]
-            preds = postprocess(inputs["attention_mask"], preds)
+            preds = postprocess(inputs["attention_mask"], preds, args.label_map_path)
             ocr_info = merge_preds_list_with_ocr_info(
                 args.label_map_path, ocr_info, inputs["segment_offset_id"],
                 preds)
