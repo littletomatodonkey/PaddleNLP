@@ -225,8 +225,8 @@ def merge_preds_list_with_ocr_info(ocr_info, segment_offset_id, preds_list,
         else:
             counts = np.bincount(curr_pred)
             pred_id = np.argmax(counts)
-        ocr_info[idx]["pred_id"] = int(pred_id)
-        ocr_info[idx]["pred"] = id2label_map[int(pred_id)]
+        ocr_info[idx]["label_id"] = int(pred_id)
+        ocr_info[idx]["label"] = id2label_map[int(pred_id)]
     return ocr_info
 
 

@@ -57,9 +57,9 @@ def draw_ser_results(image, ocr_results):
     img_new = image.copy()
     draw = ImageDraw.Draw(img_new)
     for ocr_info in ocr_results:
-        if ocr_info["pred_id"] not in color_map:
+        if ocr_info["label_id"] not in color_map:
             continue
-        color = color_map[ocr_info["pred_id"]]
+        color = color_map[ocr_info["label_id"]]
 
         # just for rectangle
         bbox = ocr_info["bbox"]
