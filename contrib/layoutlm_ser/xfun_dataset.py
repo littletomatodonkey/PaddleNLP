@@ -5,6 +5,7 @@ import sys
 import cv2
 import numpy as np
 import paddle
+import copy
 from paddle.io import Dataset, DataLoader
 
 __all__ = ["XfunDatasetForSer"]
@@ -43,7 +44,9 @@ class XfunDatasetForSer(Dataset):
             img_size=(224, 224),
             pad_token_label_id=None,
             add_special_ids=False,
-            return_attention_mask=True, ):
+            return_attention_mask=True, 
+            model_type='layoutxlm',
+            load_mode='all'):
         self.tokenizer = tokenizer
         self.data_dir = data_dir
         self.label_path = label_path
@@ -55,6 +58,10 @@ class XfunDatasetForSer(Dataset):
         self.all_lines = self.read_all_lines()
 
         self.label2id_map = label2id_map
+        self.model_type = model_type
+        self.load_mode = load_mode
+        if load_mode == "all":
+            self.encoded_inputs_all = self.read_encoded_inputs_all()        
 
     def pad_sentences(self,
                       encoded_inputs,
@@ -119,6 +126,8 @@ class XfunDatasetForSer(Dataset):
 
     def truncate_inputs(self, encoded_inputs, max_seq_len=512):
         for key in encoded_inputs:
+            if key == "sample_id":
+                continue
             length = min(len(encoded_inputs[key]), max_seq_len)
             encoded_inputs[key] = encoded_inputs[key][:length]
         return encoded_inputs
@@ -127,15 +136,8 @@ class XfunDatasetForSer(Dataset):
         with open(self.label_path, "r") as fin:
             lines = fin.readlines()
         return lines
-
-    def parse_label_file(self, line):
-        image_name, info_str = line.split("\t")
-        image_path = os.path.join(self.data_dir, image_name)
-
-        # read img
-        img = cv2.imread(image_path)
-        img = cv2.resize(img, (224, 224)).transpose([2, 0, 1])
-
+    
+    def read_encoded_inputs_sample(self, info_str):
         # read text info
         info_dict = json.loads(info_str)
         height = info_dict["height"]
@@ -168,9 +170,8 @@ class XfunDatasetForSer(Dataset):
                                                                             -1]
                 encode_res["attention_mask"] = encode_res["attention_mask"][1:
                                                                             -1]
-            if label.upper() in ["O", "OTHER", "OTHERS"]:
-                gt_label.extend([self.label2id_map["O"]] *
-                                len(encode_res["input_ids"]))
+            if label.lower() == "other":
+                gt_label.extend([0] * len(encode_res["input_ids"]))
             else:
                 gt_label.append(self.label2id_map[("b-" + label).upper()])
                 gt_label.extend([self.label2id_map[("i-" + label).upper()]] *
@@ -188,8 +189,56 @@ class XfunDatasetForSer(Dataset):
             "token_type_ids": token_type_ids_list,
             "bbox": bbox_list,
             "attention_mask": [1] * len(input_ids_list),
+            # "words_list": words_list,
         }
+        return encoded_inputs
 
+    def read_encoded_inputs_all(self):
+        num_samples = len(self.all_lines)
+        encoded_inputs_all = []
+        for lno in range(num_samples):
+            line = self.all_lines[lno]
+            image_name, info_str = line.split("\t")
+            encoded_inputs = self.read_encoded_inputs_sample(info_str)
+            seq_len = len(encoded_inputs['input_ids'])
+            chunk_size = 512
+            for chunk_id, index in enumerate(range(0, seq_len, chunk_size)):
+                chunk_beg = index
+                chunk_end = min(index + chunk_size, seq_len)
+                encoded_inputs_example = {}
+                for key in encoded_inputs:
+                    encoded_inputs_example[key] = encoded_inputs[key][chunk_beg:chunk_end]
+                encoded_inputs_example['sample_id'] = lno
+                encoded_inputs_all.append(encoded_inputs_example)
+        return encoded_inputs_all
+    
+    def parse_label_file(self, line):
+        image_name, info_str = line.split("\t")
+        image_path = os.path.join(self.data_dir, image_name)
+
+        # read img
+        if self.model_type == "layoutxlm-pp":
+            img = cv2.imread(image_path)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            resize_h, resize_w = 224, 224
+            im_shape = img.shape[0:2]
+            im_scale_y = resize_h / im_shape[0]
+            im_scale_x = resize_w / im_shape[1]
+            img_new = cv2.resize(img, None, None, 
+                                 fx=im_scale_x, fy=im_scale_y, 
+                                 interpolation=2)
+            mean = np.array([0.485, 0.456, 0.406])[np.newaxis, np.newaxis, :]
+            std = np.array([0.229, 0.224, 0.225])[np.newaxis, np.newaxis, :]
+            img_new = img_new / 255.0
+            img_new -= mean
+            img_new /= std
+            img = img_new.transpose((2, 0, 1))
+        else:
+            img = cv2.imread(image_path)
+            img = cv2.resize(img, (224, 224)).transpose([2, 0, 1])
+
+        encoded_inputs = self.read_encoded_inputs_sample(info_str)
+        
         encoded_inputs = self.pad_sentences(
             encoded_inputs, return_attention_mask=self.return_attention_mask)
         encoded_inputs = self.truncate_inputs(encoded_inputs)
@@ -212,16 +261,66 @@ class XfunDatasetForSer(Dataset):
         ]
         return res
 
-    def __getitem__(self, idx):
-        res = self.parse_label_file(self.all_lines[idx])
+    def parse_label_file_all(self, idx):
+        sample_id = self.encoded_inputs_all[idx]['sample_id']
+        image_name, info_str = self.all_lines[sample_id].split("\t")
+        image_path = os.path.join(self.data_dir, image_name)
+
+        # read img
+        if self.model_type == "layoutxlm-pp":
+            img = cv2.imread(image_path)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            resize_h, resize_w = 224, 224
+            im_shape = img.shape[0:2]
+            im_scale_y = resize_h / im_shape[0]
+            im_scale_x = resize_w / im_shape[1]
+            img_new = cv2.resize(img, None, None, 
+                                 fx=im_scale_x, fy=im_scale_y, 
+                                 interpolation=2)
+            mean = np.array([0.485, 0.456, 0.406])[np.newaxis, np.newaxis, :]
+            std = np.array([0.229, 0.224, 0.225])[np.newaxis, np.newaxis, :]
+            img_new = img_new / 255.0
+            img_new -= mean
+            img_new /= std
+            img = img_new.transpose((2, 0, 1))
+        else:
+            img = cv2.imread(image_path)
+            img = cv2.resize(img, (224, 224)).transpose([2, 0, 1])
+
+        encoded_inputs = copy.deepcopy(self.encoded_inputs_all[idx])
+        
+        encoded_inputs = self.pad_sentences(
+            encoded_inputs, return_attention_mask=self.return_attention_mask)
+        encoded_inputs = self.truncate_inputs(encoded_inputs)
+
+        encoded_inputs["image"] = img
+
+        res = [
+            np.array(
+                encoded_inputs["input_ids"], dtype=np.int64),
+            np.array(
+                encoded_inputs["label_ids"], dtype=np.int64),
+            np.array(
+                encoded_inputs["token_type_ids"], dtype=np.int64),
+            np.array(
+                encoded_inputs["bbox"], dtype=np.int64),
+            np.array(
+                encoded_inputs["attention_mask"], dtype=np.int64),
+            np.array(
+                encoded_inputs["image"], dtype=np.float32),
+        ]
         return res
-        # try:
-        #     res = self.parse_label_file(self.all_lines[idx])
-        #     return res
-        # except Exception as ex:
-        #     print("error: ", ex)
-        #     rnd_idx = np.random.randint(self.__len__())
-        #     return self.__getitem__(rnd_idx)
+    
+    def __getitem__(self, idx):
+        if self.load_mode == "all":
+            res = self.parse_label_file_all(idx)
+            return res            
+        else:
+            res = self.parse_label_file(self.all_lines[idx])
+            return res
 
     def __len__(self, ):
-        return len(self.all_lines)
+        if self.load_mode == "all":
+            return len(self.encoded_inputs_all)
+        else:
+            return len(self.all_lines)

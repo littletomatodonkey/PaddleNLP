@@ -23,6 +23,10 @@ from paddlenlp.transformers import LayoutXLMPPModel, LayoutXLMPPTokenizer, Layou
 
 from xfun_dataset import XfunDatasetForSer
 
+MODEL_CLASSES = {
+    "layoutxlm":(LayoutXLMModel, LayoutXLMTokenizer, LayoutXLMForTokenClassification),
+    "layoutxlm-pp":(LayoutXLMPPModel, LayoutXLMPPTokenizer, LayoutXLMPPForTokenClassification),
+}
 
 def set_seed(args):
     random.seed(args.seed)
@@ -51,7 +55,10 @@ def train(args):
     if paddle.distributed.get_world_size() > 1:
         paddle.distributed.init_parallel_env()
 
-    tokenizer = LayoutXLMTokenizer.from_pretrained(args.model_name_or_path)
+    model_class, tokenizer_class, classify_class = MODEL_CLASSES[args.model_type]
+    tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path)
+
+#     tokenizer = LayoutXLMTokenizer.from_pretrained(args.model_name_or_path)
 
 #     # for training process, model is needed for the bert class
 #     # else it can directly loaded for the downstream task
@@ -59,12 +66,14 @@ def train(args):
 #     model = LayoutXLMForTokenClassification(
 #         model, num_classes=len(label2id_map), dropout=None)
 
-    if args.model_type == "layoutxlm":
-        model = LayoutXLMModel.from_pretrained(args.model_name_or_path)
-    elif args.model_type == "layoutxlm-pp":
-        model = LayoutXLMPPModel.from_pretrained(args.model_name_or_path)
-    model = LayoutXLMForTokenClassification(
-        model, num_classes=len(label2id_map), dropout=None)
+#     if args.model_type == "layoutxlm":
+#         model = LayoutXLMModel.from_pretrained(args.model_name_or_path)
+#     elif args.model_type == "layoutxlm-pp":
+#         model = LayoutXLMPPModel.from_pretrained(args.model_name_or_path)
+#     model = LayoutXLMForTokenClassification(
+#         model, num_classes=len(label2id_map), dropout=None)
+    model = model_class.from_pretrained(args.model_name_or_path)
+    model = classify_class(model, num_classes=len(label2id_map), dropout=None)
     
     # dist mode
     if paddle.distributed.get_world_size() > 1:
@@ -77,7 +86,9 @@ def train(args):
         label2id_map=label2id_map,
         img_size=(224, 224),
         pad_token_label_id=pad_token_label_id,
-        add_special_ids=False)
+        add_special_ids=False,
+        model_type=args.model_type,
+        load_mode='all')
 
     train_sampler = paddle.io.DistributedBatchSampler(
         train_dataset, batch_size=args.per_gpu_train_batch_size, shuffle=True)
@@ -151,8 +162,7 @@ def train(args):
             # model outputs are always tuple in ppnlp (see doc)
             loss = outputs[0]
             loss = loss.mean()
-
-            logger.info("[epoch {}/{}][iter: {}/{}] lr: {}, train loss: {}, ".
+            logger.info("[epoch {}/{}][iter: {}/{}] lr: {:.5f}, train loss: {:.5f}, ".
                         format(epoch_id, args.num_train_epochs, step,
                                len(train_dataloader),
                                lr_scheduler.get_lr(), loss.numpy()[0]))
@@ -229,7 +239,9 @@ def evaluate(args,
         label2id_map=label2id_map,
         img_size=(224, 224),
         pad_token_label_id=pad_token_label_id,
-        add_special_ids=False)
+        add_special_ids=False,
+        model_type=args.model_type,
+        load_mode='all')
 
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(
         1, paddle.distributed.get_world_size())
@@ -272,8 +284,8 @@ def evaluate(args,
             tmp_eval_loss = tmp_eval_loss.mean()
 
             if paddle.distributed.get_rank() == 0:
-                logger.info("[Eval]process: {}/{}, loss: {}".format(
-                    idx, len(eval_dataloader), tmp_eval_loss.numpy()))
+                logger.info("[Eval]process: {}/{}, loss: {:.5f}".format(
+                    idx, len(eval_dataloader), tmp_eval_loss.numpy()[0]))
 
             eval_loss += tmp_eval_loss.item()
         nb_eval_steps += 1
