@@ -14,7 +14,7 @@ def transfer_xfun_data(json_path="/paddle/data/xfun/zh.val.json",
         for idx, document in enumerate(documents):
             img_info = document["img"]
             document = document["document"]
-            image_path = "img/" + img_info["fname"]
+            image_path = img_info["fname"]
 
             label_info["height"] = img_info["height"]
             label_info["width"] = img_info["width"]
@@ -26,6 +26,9 @@ def transfer_xfun_data(json_path="/paddle/data/xfun/zh.val.json",
                     "text": doc["text"],
                     "label": doc["label"],
                     "bbox": doc["box"],
+                    "id": doc["id"],
+                    "linking": doc["linking"],
+                    "words": doc["linking"]
                 })
 
             fout.write(image_path + "\t" + json.dumps(

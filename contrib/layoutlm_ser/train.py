@@ -1,5 +1,6 @@
 import os
 import sys
+
 sys.path.insert(0, "../../")
 
 import paddle
@@ -8,6 +9,7 @@ import numpy as np
 import random
 import copy
 import logging
+
 logger = logging.getLogger(__name__)
 
 from seqeval.metrics import (
@@ -21,12 +23,15 @@ from utils import parse_args, get_label_maps
 from paddlenlp.transformers import LayoutXLMModel, LayoutXLMTokenizer, LayoutXLMForTokenClassification
 from paddlenlp.transformers import LayoutXLMPPModel, LayoutXLMPPTokenizer, LayoutXLMPPForTokenClassification
 
-from xfun_dataset import XfunDatasetForSer
+from xfun_dataset import XfunDataset
 
 MODEL_CLASSES = {
-    "layoutxlm":(LayoutXLMModel, LayoutXLMTokenizer, LayoutXLMForTokenClassification),
-    "layoutxlm-pp":(LayoutXLMPPModel, LayoutXLMPPTokenizer, LayoutXLMPPForTokenClassification),
+    "layoutxlm":
+    (LayoutXLMModel, LayoutXLMTokenizer, LayoutXLMForTokenClassification),
+    "layoutxlm-pp":
+    (LayoutXLMPPModel, LayoutXLMPPTokenizer, LayoutXLMPPForTokenClassification),
 }
+
 
 def set_seed(args):
     random.seed(args.seed)
@@ -55,38 +60,41 @@ def train(args):
     if paddle.distributed.get_world_size() > 1:
         paddle.distributed.init_parallel_env()
 
-    model_class, tokenizer_class, classify_class = MODEL_CLASSES[args.model_type]
+    model_class, tokenizer_class, classify_class = MODEL_CLASSES[
+        args.model_type]
     tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path)
 
-#     tokenizer = LayoutXLMTokenizer.from_pretrained(args.model_name_or_path)
+    #     tokenizer = LayoutXLMTokenizer.from_pretrained(args.model_name_or_path)
 
-#     # for training process, model is needed for the bert class
-#     # else it can directly loaded for the downstream task
-#     model = LayoutXLMModel.from_pretrained(args.model_name_or_path)
-#     model = LayoutXLMForTokenClassification(
-#         model, num_classes=len(label2id_map), dropout=None)
+    #     # for training process, model is needed for the bert class
+    #     # else it can directly loaded for the downstream task
+    #     model = LayoutXLMModel.from_pretrained(args.model_name_or_path)
+    #     model = LayoutXLMForTokenClassification(
+    #         model, num_classes=len(label2id_map), dropout=None)
 
-#     if args.model_type == "layoutxlm":
-#         model = LayoutXLMModel.from_pretrained(args.model_name_or_path)
-#     elif args.model_type == "layoutxlm-pp":
-#         model = LayoutXLMPPModel.from_pretrained(args.model_name_or_path)
-#     model = LayoutXLMForTokenClassification(
-#         model, num_classes=len(label2id_map), dropout=None)
+    #     if args.model_type == "layoutxlm":
+    #         model = LayoutXLMModel.from_pretrained(args.model_name_or_path)
+    #     elif args.model_type == "layoutxlm-pp":
+    #         model = LayoutXLMPPModel.from_pretrained(args.model_name_or_path)
+    #     model = LayoutXLMForTokenClassification(
+    #         model, num_classes=len(label2id_map), dropout=None)
     model = model_class.from_pretrained(args.model_name_or_path)
     model = classify_class(model, num_classes=len(label2id_map), dropout=None)
-    
+
     # dist mode
     if paddle.distributed.get_world_size() > 1:
         model = paddle.distributed.DataParallel(model)
 
-    train_dataset = XfunDatasetForSer(
+    train_dataset = XfunDataset(
         tokenizer,
         data_dir=args.train_data_dir,
         label_path=args.train_label_path,
         label2id_map=label2id_map,
         img_size=(224, 224),
         pad_token_label_id=pad_token_label_id,
+        contains_re=False,
         add_special_ids=False,
+        return_attention_mask=True,
         model_type=args.model_type,
         load_mode='all')
 
@@ -144,28 +152,15 @@ def train(args):
     for epoch_id in range(args.num_train_epochs):
         for step, batch in enumerate(train_dataloader):
             model.train()
-            inputs = {
-                "input_ids": batch[0],
-                "label_ids": batch[1],
-                "token_type_ids": batch[2],
-                "bbox": batch[3],
-                "attention_mask": batch[4],
-                "image": batch[5],
-            }
-            outputs = model(
-                input_ids=inputs["input_ids"],
-                bbox=inputs["bbox"],
-                image=inputs["image"],
-                token_type_ids=inputs["token_type_ids"],
-                attention_mask=inputs["attention_mask"],
-                labels=inputs["label_ids"])
+            outputs = model(**batch)
             # model outputs are always tuple in ppnlp (see doc)
             loss = outputs[0]
             loss = loss.mean()
-            logger.info("[epoch {}/{}][iter: {}/{}] lr: {:.5f}, train loss: {:.5f}, ".
-                        format(epoch_id, args.num_train_epochs, step,
-                               len(train_dataloader),
-                               lr_scheduler.get_lr(), loss.numpy()[0]))
+            logger.info(
+                "[epoch {}/{}][iter: {}/{}] lr: {:.5f}, train loss: {:.5f}, ".
+                format(epoch_id, args.num_train_epochs, step,
+                       len(train_dataloader),
+                       lr_scheduler.get_lr(), loss.numpy()[0]))
 
             loss.backward()
             tr_loss += loss.item()
@@ -232,19 +227,22 @@ def evaluate(args,
              pad_token_label_id,
              mode,
              prefix=""):
-    eval_dataset = XfunDatasetForSer(
+    eval_dataset = XfunDataset(
         tokenizer,
         data_dir=args.eval_data_dir,
         label_path=args.eval_label_path,
         label2id_map=label2id_map,
         img_size=(224, 224),
         pad_token_label_id=pad_token_label_id,
+        contains_re=False,
         add_special_ids=False,
+        return_attention_mask=True,
         model_type=args.model_type,
         load_mode='all')
 
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(
         1, paddle.distributed.get_world_size())
+
     eval_dataloader = paddle.io.DataLoader(
         eval_dataset,
         batch_size=args.eval_batch_size,
@@ -263,22 +261,7 @@ def evaluate(args,
     model.eval()
     for idx, batch in enumerate(eval_dataloader):
         with paddle.no_grad():
-            inputs = {
-                "input_ids": batch[0],
-                "label_ids": batch[1],
-                "token_type_ids": batch[2],
-                "bbox": batch[3],
-                "attention_mask": batch[4],
-                "image": batch[5],
-            }
-
-            outputs = model(
-                input_ids=inputs["input_ids"],
-                bbox=inputs["bbox"],
-                image=inputs["image"],
-                token_type_ids=inputs["token_type_ids"],
-                attention_mask=inputs["attention_mask"],
-                labels=inputs["label_ids"])
+            outputs = model(**batch)
             tmp_eval_loss, logits = outputs[:2]
 
             tmp_eval_loss = tmp_eval_loss.mean()
@@ -291,11 +274,11 @@ def evaluate(args,
         nb_eval_steps += 1
         if preds is None:
             preds = logits.numpy()
-            out_label_ids = inputs["label_ids"].numpy()
+            out_label_ids = batch["labels"].numpy()
         else:
             preds = np.append(preds, logits.numpy(), axis=0)
             out_label_ids = np.append(
-                out_label_ids, inputs["label_ids"].numpy(), axis=0)
+                out_label_ids, batch["labels"].numpy(), axis=0)
 
     eval_loss = eval_loss / nb_eval_steps
     preds = np.argmax(preds, axis=2)
