@@ -1,10 +1,9 @@
 from .. import PretrainedModel, register_base_model
-from ..layoutlmv2.modeling import LayoutLMv2Model, LayoutLMv2ForTokenClassification, LayoutLMv2ForPretraining
+from ..layoutlmv2.modeling import LayoutLMv2Model, LayoutLMv2ForTokenClassification, LayoutLMv2ForPretraining, LayoutLMv2ForRelationExtraction
 
 __all__ = [
-    "LayoutXLMModel",
-    "LayoutXLMForTokenClassification",
-    "LayoutXLMForPretraining"
+    "LayoutXLMModel", "LayoutXLMForTokenClassification",
+    "LayoutXLMForPretraining", "LayoutXLMForRelationExtraction"
 ]
 
 
@@ -61,9 +60,15 @@ class LayoutXLMModel(LayoutLMv2Model):
 class LayoutXLMForTokenClassification(LayoutLMv2ForTokenClassification):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-    
-    
+
+
 @register_base_model
 class LayoutXLMForPretraining(LayoutLMv2ForPretraining):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
+@register_base_model
+class LayoutXLMForRelationExtraction(LayoutLMv2ForRelationExtraction):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

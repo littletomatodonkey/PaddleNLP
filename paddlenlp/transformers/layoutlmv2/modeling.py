@@ -23,14 +23,12 @@ from paddle.nn import TransformerEncoder, Linear, Layer, Embedding, LayerNorm, T
 from .. import PretrainedModel, register_base_model
 from .fpn import build_resnet_fpn_backbone
 from .visual_backbone_config import read_config
-
+from .re import REDecoder
 from ..layoutlm.modeling import LayoutLMPooler as LayoutLMv2Pooler
 
 __all__ = [
-    'LayoutLMv2Model',
-    "LayoutLMv2PretrainedModel",
-    "LayoutLMv2ForTokenClassification",
-    "LayoutLMv2ForPretraining"
+    'LayoutLMv2Model', "LayoutLMv2PretrainedModel",
+    "LayoutLMv2ForTokenClassification", "LayoutLMv2ForPretraining"
 ]
 
 
@@ -633,14 +631,11 @@ class VisualBackbone(nn.Layer):
 class LayoutLMv2Model(LayoutLMv2PretrainedModel):
     """
     The bare BERT Model transformer outputting raw hidden-states without any specific head on top.
-
     This model inherits from :class:`~paddlenlp.transformers.model_utils.PretrainedModel`.
     Check the superclass documentation for the generic methods and the library implements for all its model.
-
     This model is also a Paddle `paddle.nn.Layer <https://www.paddlepaddle.org.cn/documentation
     /docs/en/api/paddle/fluid/dygraph/layers/Layer_en.html>`__ subclass. Use it as a regular Paddle Layer
     and refer to the Paddle documentation for all matter related to general usage and behavior.
-
     Args:
         vocab_size (`int`):
             Vocabulary size of the XLNet model. Defines the number of different tokens that can
@@ -694,7 +689,8 @@ class LayoutLMv2Model(LayoutLMv2PretrainedModel):
 
         self.encoder = LayoutLMv2Encoder(config)
         self.pooler = LayoutLMv2Pooler(config["hidden_size"], with_pool)
-#         self.apply(self.init_weights)
+
+    #         self.apply(self.init_weights)
 
     def _calc_text_embeddings(self, input_ids, bbox, position_ids,
                               token_type_ids):
@@ -898,7 +894,7 @@ class LayoutLMv2ForTokenClassification(LayoutLMv2PretrainedModel):
 
         return outputs
 
-    
+
 class LayoutLMv2PredictionHead(Layer):
     """
     Bert Model with a `language modeling` head on top for CLM fine-tuning.
@@ -943,14 +939,14 @@ class LayoutLMv2PretrainingHeads(Layer):
                  activation,
                  embedding_weights=None):
         super(LayoutLMv2PretrainingHeads, self).__init__()
-        self.predictions = LayoutLMv2PredictionHead(hidden_size, vocab_size,
-                                                activation, embedding_weights)
+        self.predictions = LayoutLMv2PredictionHead(
+            hidden_size, vocab_size, activation, embedding_weights)
 
     def forward(self, sequence_output, masked_positions=None):
         prediction_scores = self.predictions(sequence_output, masked_positions)
         return prediction_scores
 
-    
+
 @register_base_model
 class LayoutLMv2ForPretraining(LayoutLMv2PretrainedModel):
     def __init__(self, layoutlm):
@@ -962,18 +958,17 @@ class LayoutLMv2ForPretraining(LayoutLMv2PretrainedModel):
             self.layoutlmv2.config["hidden_act"],
             embedding_weights=self.layoutlmv2.embeddings.word_embeddings.weight)
 
-#         self.apply(self.init_weights)
-        
-    def forward(
-            self,
-            input_ids=None,
-            bbox=None,
-            image=None,
-            attention_mask=None,
-            token_type_ids=None,
-            position_ids=None,
-            head_mask=None,
-            masked_positions=None):
+    #         self.apply(self.init_weights)
+
+    def forward(self,
+                input_ids=None,
+                bbox=None,
+                image=None,
+                attention_mask=None,
+                token_type_ids=None,
+                position_ids=None,
+                head_mask=None,
+                masked_positions=None):
         outputs = self.layoutlmv2(
             input_ids=input_ids,
             bbox=bbox,
@@ -985,3 +980,83 @@ class LayoutLMv2ForPretraining(LayoutLMv2PretrainedModel):
         sequence_output = outputs[0]
         prediction_scores = self.cls(sequence_output, masked_positions)
         return prediction_scores
+
+
+@register_base_model
+class LayoutLMv2ForRelationExtraction(LayoutLMv2PretrainedModel):
+    def __init__(self,
+                 layoutlm,
+                 hidden_size=768,
+                 hidden_dropout_prob=0.1,
+                 dropout=None):
+        super().__init__()
+        if isinstance(layoutlm, dict):
+            self.layoutlmv2 = LayoutLMv2Model(**layoutlm)
+        else:
+            self.layoutlmv2 = layoutlm
+
+        self.extractor = REDecoder(hidden_size, hidden_dropout_prob)
+
+        self.dropout = nn.Dropout(dropout if dropout is not None else
+                                  self.layoutlmv2.config["hidden_dropout_prob"])
+        # self.extractor.apply(self.init_weights)
+
+    def init_weights(self, layer):
+        """Initialize the weights"""
+        if isinstance(layer, nn.Linear):
+            # Slightly different from the TF version which uses truncated_normal for initialization
+            # cf https://github.com/pytorch/pytorch/pull/5617
+            layer.weight.set_value(
+                paddle.tensor.normal(
+                    mean=0.0, std=0.02, shape=layer.weight.shape))
+            if layer.bias is not None:
+                layer.bias.set_value(
+                    paddle.tensor.zeros(shape=layer.bias.shape))
+        elif isinstance(layer, nn.Embedding):
+            layer.weight.set_value(
+                paddle.tensor.normal(
+                    mean=0.0, std=0.02, shape=layer.weight.shape))
+            if layer._padding_idx is not None:
+                layer.weight[layer._padding_idx].set_value(
+                    paddle.tensor.normal(
+                        mean=0.0,
+                        std=0.02,
+                        shape=layer.weight[layer._padding_idx].shape))
+        elif isinstance(layer, nn.LayerNorm):
+            layer.weight.set_value(paddle.tensor.ones(shape=layer.bias.shape))
+            layer.bias.set_value(paddle.tensor.zeros(shape=layer.bias.shape))
+
+    def forward(
+            self,
+            input_ids,
+            bbox,
+            labels=None,
+            image=None,
+            attention_mask=None,
+            token_type_ids=None,
+            position_ids=None,
+            head_mask=None,
+            entities=None,
+            relations=None, ):
+        outputs = self.layoutlmv2(
+            input_ids=input_ids,
+            bbox=bbox,
+            image=image,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask, )
+
+        seq_length = input_ids.shape[1]
+        sequence_output, image_output = outputs[0][:, :seq_length], outputs[
+            0][:, seq_length:]
+        sequence_output = self.dropout(sequence_output)
+        loss, pred_relations = self.extractor(sequence_output, entities,
+                                              relations)
+
+        return dict(
+            loss=loss,
+            entities=entities,
+            relations=relations,
+            pred_relations=pred_relations,
+            hidden_states=outputs[0], )

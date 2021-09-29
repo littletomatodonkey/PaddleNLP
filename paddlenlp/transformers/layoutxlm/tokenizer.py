@@ -42,8 +42,3 @@ class LayoutXLMTokenizer(XLMRobertaTokenizer):
     }
     max_model_input_sizes = pretrained_positional_embedding_sizes
     model_input_names = ["input_ids", "attention_mask"]
-
-    # def __init__(self, model_max_length=512, **kwargs):
-
-
-# super().__init__(model_max_length=model_max_length, **kwargs)

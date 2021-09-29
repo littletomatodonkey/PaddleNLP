@@ -28,12 +28,12 @@ from .resnet import ResNet
 from .yolo_fpn import PPYOLOPAN
 
 from ..layoutlm.modeling import LayoutLMPooler as LayoutLMv2PPPooler
+from ..layoutlmv2.re import REDecoder
 
 __all__ = [
-    'LayoutLMv2PPModel',
-    "LayoutLMv2PPPretrainedModel",
-    "LayoutLMv2PPForTokenClassification",
-    "LayoutLMv2PPForPretraining",
+    'LayoutLMv2PPModel', "LayoutLMv2PPPretrainedModel",
+    "LayoutLMv2PPForTokenClassification", "LayoutLMv2PPForPretraining",
+    "LayoutLMv2PPForRelationExtraction"
 ]
 
 
@@ -394,7 +394,8 @@ class LayoutLMv2PPEncoder(nn.Layer):
         super().__init__()
         self.config = config
         self.layer = nn.LayerList([
-            LayoutLMv2PPLayer(config) for _ in range(config["num_hidden_layers"])
+            LayoutLMv2PPLayer(config)
+            for _ in range(config["num_hidden_layers"])
         ])
 
         self.has_relative_attention_bias = config["has_relative_attention_bias"]
@@ -608,19 +609,27 @@ class VisualBackbone(nn.Layer):
         freeze_norm = cfg.ResNet.freeze_norm
         norm_decay = cfg.ResNet.norm_decay
         norm_type = cfg.norm_type
-        self.resnet = ResNet(depth=depth, variant=variant, return_idx=return_idx,
-                       dcn_v2_stages=dcn_v2_stages, freeze_at=freeze_at,
-                       freeze_norm=freeze_norm, norm_decay=norm_decay,
-                       norm_type=norm_type)
+        self.resnet = ResNet(
+            depth=depth,
+            variant=variant,
+            return_idx=return_idx,
+            dcn_v2_stages=dcn_v2_stages,
+            freeze_at=freeze_at,
+            freeze_norm=freeze_norm,
+            norm_decay=norm_decay,
+            norm_type=norm_type)
         drop_block = cfg.PPYOLOPAN.drop_block
         block_size = cfg.PPYOLOPAN.block_size
         keep_prob = cfg.PPYOLOPAN.keep_prob
-        spp = cfg.PPYOLOPAN.spp        
-        self.fpn = PPYOLOPAN(drop_block=drop_block, block_size=block_size,
-                        keep_prob=keep_prob, spp=spp)
+        spp = cfg.PPYOLOPAN.spp
+        self.fpn = PPYOLOPAN(
+            drop_block=drop_block,
+            block_size=block_size,
+            keep_prob=keep_prob,
+            spp=spp)
 
         self.pool = nn.AdaptiveAvgPool2D(config["image_feature_pool_shape"][:2])
-        
+
 #         info = paddle.load(cfg.pretrain_weights)
 #         resnet_state_dict = self.resnet.state_dict()
 #         fpn_state_dict = self.fpn.state_dict()
@@ -633,9 +642,9 @@ class VisualBackbone(nn.Layer):
 
 #         self.resnet.load_dict(trans_info)
 #         self.fpn.load_dict(trans_info)
-    
+
     def forward(self, images):
-        body_feats = self.resnet({'image':images})
+        body_feats = self.resnet({'image': images})
         features = self.fpn(body_feats)
         features = self.pool(features[2]).flatten(start_axis=2).transpose(
             [0, 2, 1])
@@ -706,6 +715,7 @@ class LayoutLMv2PPModel(LayoutLMv2PPPretrainedModel):
 
         self.encoder = LayoutLMv2PPEncoder(config)
         self.pooler = LayoutLMv2PPPooler(config["hidden_size"], with_pool)
+
 #         self.apply(self.init_weights)
 
     def _calc_text_embeddings(self, input_ids, bbox, position_ids,
@@ -905,7 +915,7 @@ class LayoutLMv2PPForTokenClassification(LayoutLMv2PPPretrainedModel):
 
         return outputs
 
-    
+
 class LayoutLMv2PPLMPredictionHead(nn.Layer):
     r"""
     Bert Model with a `language modeling` head on top.
@@ -946,8 +956,8 @@ class LayoutLMv2PPLMPredictionHead(nn.Layer):
             hidden_states, self.decoder_weight,
             transpose_y=True) + self.decoder_bias
         return hidden_states
-    
-    
+
+
 class LayoutLMv2PPPretrainingHeads(nn.Layer):
     def __init__(
             self,
@@ -959,6 +969,7 @@ class LayoutLMv2PPPretrainingHeads(nn.Layer):
         super(LayoutLMv2PPPretrainingHeads, self).__init__()
         self.predictions = LayoutLMv2PPLMPredictionHead(
             hidden_size, vocab_size, activation, embedding_weights, weight_attr)
+
 #         self.seq_relationship = nn.Linear(
 #             hidden_size, 2, weight_attr=weight_attr)
 
@@ -985,14 +996,14 @@ class LayoutLMv2PPForPretraining(LayoutLMv2PPPretrainedModel):
 #         self.apply(self.init_weights)
 
     def forward(self,
-            input_ids=None,
-            bbox=None,
-            image=None,
-            attention_mask=None,
-            token_type_ids=None,
-            position_ids=None,
-            head_mask=None,
-            masked_positions=None):
+                input_ids=None,
+                bbox=None,
+                image=None,
+                attention_mask=None,
+                token_type_ids=None,
+                position_ids=None,
+                head_mask=None,
+                masked_positions=None):
         outputs = self.layoutlmv2(
             input_ids=input_ids,
             bbox=bbox,
@@ -1004,3 +1015,58 @@ class LayoutLMv2PPForPretraining(LayoutLMv2PPPretrainedModel):
         sequence_output, _ = outputs[:2]
         prediction_scores = self.cls(sequence_output, masked_positions)
         return prediction_scores
+
+
+@register_base_model
+class LayoutLMv2PPForRelationExtraction(LayoutLMv2PPPretrainedModel):
+    def __init__(self,
+                 layoutlm,
+                 hidden_size=768,
+                 hidden_dropout_prob=0.1,
+                 dropout=None):
+        super().__init__()
+        if isinstance(layoutlm, dict):
+            self.layoutlmv2 = LayoutLMv2PPModel(**layoutlm)
+        else:
+            self.layoutlmv2 = layoutlm
+
+        self.extractor = REDecoder(hidden_size, hidden_dropout_prob)
+
+        self.dropout = nn.Dropout(dropout if dropout is not None else
+                                  self.layoutlmv2.config["hidden_dropout_prob"])
+        self.extractor.apply(self.init_weights)
+
+    def forward(
+            self,
+            input_ids,
+            bbox,
+            labels=None,
+            image=None,
+            attention_mask=None,
+            token_type_ids=None,
+            position_ids=None,
+            head_mask=None,
+            entities=None,
+            relations=None, ):
+        outputs = self.layoutlmv2(
+            input_ids=input_ids,
+            bbox=bbox,
+            image=image,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask, )
+
+        seq_length = input_ids.shape[1]
+        sequence_output, image_output = outputs[0][:, :seq_length], outputs[
+            0][:, seq_length:]
+        sequence_output = self.dropout(sequence_output)
+        loss, pred_relations = self.extractor(sequence_output, entities,
+                                              relations)
+
+        return dict(
+            loss=loss,
+            entities=entities,
+            relations=relations,
+            pred_relations=pred_relations,
+            hidden_states=outputs[0], )
