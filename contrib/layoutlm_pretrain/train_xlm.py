@@ -55,7 +55,6 @@ def train(args):
     
     pretrained_models_list = list(
         model_class.pretrained_init_configuration.keys())
-    print(pretrained_models_list)    
         
     model = base_class.from_pretrained(args.model_name_or_path)
     model = model_class(model)
