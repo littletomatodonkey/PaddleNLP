@@ -55,23 +55,10 @@ def train(args):
     
     pretrained_models_list = list(
         model_class.pretrained_init_configuration.keys())
-    print(pretrained_models_list)
-    
-#     if args.model_name_or_path in pretrained_models_list:
-#         model = model_class(
-#             base_class(**model_class.pretrained_init_configuration[
-#                 args.model_name_or_path]))
-#     else:
-#         print("load pretrained model...")
-#         model = model_class.from_pretrained(args.model_name_or_path)
-
-    if args.model_type == "layoutxlm":
-        model = LayoutXLMModel.from_pretrained(args.model_name_or_path)
-        model = LayoutXLMForPretraining(model)
-    elif args.model_type == "layoutxlm-pp":
-        model = LayoutXLMPPModel.from_pretrained(args.model_name_or_path)
-        model = LayoutXLMPPForPretraining(model)       
         
+    model = base_class.from_pretrained(args.model_name_or_path)
+    model = model_class(model)
+    
     # dist mode
     if paddle.distributed.get_world_size() > 1:
         model = paddle.DataParallel(model)
