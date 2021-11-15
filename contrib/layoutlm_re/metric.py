@@ -3,9 +3,9 @@ import re
 
 import numpy as np
 
-from transformers.utils import logging
+import logging
 
-logger = logging.get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 PREFIX_CHECKPOINT_DIR = "checkpoint"
 _re_checkpoint = re.compile(r"^" + PREFIX_CHECKPOINT_DIR + r"\-(\d+)$")

@@ -28,7 +28,7 @@ def transfer_xfun_data(json_path="/paddle/data/xfun/zh.val.json",
                     "bbox": doc["box"],
                     "id": doc["id"],
                     "linking": doc["linking"],
-                    "words": doc["linking"]
+                    "words": doc["words"]
                 })
 
             fout.write(image_path + "\t" + json.dumps(

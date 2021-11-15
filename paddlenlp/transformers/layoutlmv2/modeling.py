@@ -1001,37 +1001,12 @@ class LayoutLMv2ForRelationExtraction(LayoutLMv2PretrainedModel):
                                   self.layoutlmv2.config["hidden_dropout_prob"])
         # self.extractor.apply(self.init_weights)
 
-    def init_weights(self, layer):
-        """Initialize the weights"""
-        if isinstance(layer, nn.Linear):
-            # Slightly different from the TF version which uses truncated_normal for initialization
-            # cf https://github.com/pytorch/pytorch/pull/5617
-            layer.weight.set_value(
-                paddle.tensor.normal(
-                    mean=0.0, std=0.02, shape=layer.weight.shape))
-            if layer.bias is not None:
-                layer.bias.set_value(
-                    paddle.tensor.zeros(shape=layer.bias.shape))
-        elif isinstance(layer, nn.Embedding):
-            layer.weight.set_value(
-                paddle.tensor.normal(
-                    mean=0.0, std=0.02, shape=layer.weight.shape))
-            if layer._padding_idx is not None:
-                layer.weight[layer._padding_idx].set_value(
-                    paddle.tensor.normal(
-                        mean=0.0,
-                        std=0.02,
-                        shape=layer.weight[layer._padding_idx].shape))
-        elif isinstance(layer, nn.LayerNorm):
-            layer.weight.set_value(paddle.tensor.ones(shape=layer.bias.shape))
-            layer.bias.set_value(paddle.tensor.zeros(shape=layer.bias.shape))
-
     def forward(
             self,
             input_ids,
             bbox,
+            image,
             labels=None,
-            image=None,
             attention_mask=None,
             token_type_ids=None,
             position_ids=None,
